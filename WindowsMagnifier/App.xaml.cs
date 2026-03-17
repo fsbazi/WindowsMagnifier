@@ -290,8 +290,8 @@ public partial class App : System.Windows.Application
         {
             var window = new MainWindow(display, _settings!, firstWindow);
             window.SettingsRequested += ShowSettingsWindow;
-            window.ExitRequested += () => Shutdown();
-            window.SettingsModified += () => _configService?.Save(_settings!);
+            window.ExitRequested += OnWindowExitRequested;
+            window.SettingsModified += OnSettingsModified;
             _magnifierWindows.Add(window);
             firstWindow = false;
         }
@@ -310,6 +310,9 @@ public partial class App : System.Windows.Application
             window.Show();
         }
     }
+
+    private void OnWindowExitRequested() => Shutdown();
+    private void OnSettingsModified() => _configService?.Save(_settings!);
 
     private bool _isShowingSettings;
 
@@ -409,6 +412,8 @@ public partial class App : System.Windows.Application
             foreach (var window in _magnifierWindows)
             {
                 window.SettingsRequested -= ShowSettingsWindow;
+                window.ExitRequested -= OnWindowExitRequested;
+                window.SettingsModified -= OnSettingsModified;
                 window.Close();
             }
             _magnifierWindows.Clear();
@@ -491,6 +496,9 @@ public partial class App : System.Windows.Application
 
         foreach (var window in _magnifierWindows)
         {
+            window.SettingsRequested -= ShowSettingsWindow;
+            window.ExitRequested -= OnWindowExitRequested;
+            window.SettingsModified -= OnSettingsModified;
             window.Close();
         }
 

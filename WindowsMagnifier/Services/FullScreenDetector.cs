@@ -12,7 +12,7 @@ public class FullScreenDetector : IDisposable
     private readonly DisplayManager _displayManager;
     private readonly int _pollIntervalMs;
     private System.Timers.Timer? _pollTimer;
-    private bool _isFullScreenActive;
+    private volatile bool _isFullScreenActive;
 
     /// <summary>
     /// 当前是否检测到全屏应用

@@ -114,11 +114,12 @@ public class TrackingManager : IDisposable
             System.Windows.Forms.Control.MousePosition.Y);
         PositionChanged?.Invoke(_currentPosition, _currentMode);
 
-        // 防抖获取 caret 位置（取消之前的请求，避免每次按键都调用 UI Automation）
-        _caretCts?.Cancel();
-        _caretCts?.Dispose();
-        _caretCts = new CancellationTokenSource();
-        var token = _caretCts.Token;
+        // 防抖获取 caret 位置（原子替换，避免竞态）
+        var newCts = new CancellationTokenSource();
+        var oldCts = Interlocked.Exchange(ref _caretCts, newCts);
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+        var token = newCts.Token;
 
         Task.Run(() => DebouncedCaretLookup(token), token);
     }
@@ -263,8 +264,9 @@ public class TrackingManager : IDisposable
 
     public void Dispose()
     {
-        _caretCts?.Cancel();
-        _caretCts?.Dispose();
+        var cts = Interlocked.Exchange(ref _caretCts, null);
+        cts?.Cancel();
+        cts?.Dispose();
         _mouseHook.Dispose();
         _keyboardHook.Dispose();
         GC.SuppressFinalize(this);
