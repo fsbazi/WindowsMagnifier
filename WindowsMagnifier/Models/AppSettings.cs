@@ -1,0 +1,76 @@
+using System.Collections.Generic;
+
+namespace WindowsMagnifier.Models;
+
+/// <summary>
+/// 应用配置数据模型
+/// </summary>
+public class AppSettings
+{
+    /// <summary>
+    /// 全局默认放大倍数 (1-16)，向后兼容旧配置
+    /// </summary>
+    public int MagnificationLevel { get; set; } = 3;
+
+    /// <summary>
+    /// 每显示器独立的放大倍数，key 为 DeviceName
+    /// </summary>
+    public Dictionary<string, int>? DisplayMagnificationLevels { get; set; }
+
+    /// <summary>
+    /// 放大镜窗口高度（像素）
+    /// </summary>
+    public int WindowHeight { get; set; } = 300;
+
+    /// <summary>
+    /// 是否跟随鼠标指针
+    /// </summary>
+    public bool FollowMouse { get; set; } = true;
+
+    /// <summary>
+    /// 是否跟随键盘输入
+    /// </summary>
+    public bool FollowKeyboardInput { get; set; } = true;
+
+    /// <summary>
+    /// 启动后是否最小化
+    /// </summary>
+    public bool StartMinimized { get; set; } = false;
+
+    /// <summary>
+    /// 全屏应用时自动隐藏放大镜
+    /// </summary>
+    public bool HideOnFullScreen { get; set; } = true;
+
+    /// <summary>
+    /// 显示器切换延迟（毫秒）
+    /// </summary>
+    public int DisplaySwitchDelay { get; set; } = 100;
+
+    /// <summary>
+    /// 获取指定显示器的放大倍数，找不到则返回全局默认值
+    /// </summary>
+    public int GetMagnificationLevel(string deviceName)
+    {
+        if (DisplayMagnificationLevels != null &&
+            DisplayMagnificationLevels.TryGetValue(deviceName, out var level))
+        {
+            return level;
+        }
+        return MagnificationLevel;
+    }
+
+    /// <summary>
+    /// 设置指定显示器的放大倍数
+    /// </summary>
+    public void SetMagnificationLevel(string deviceName, int level)
+    {
+        DisplayMagnificationLevels ??= new Dictionary<string, int>();
+        DisplayMagnificationLevels[deviceName] = level;
+    }
+
+    /// <summary>
+    /// 返回默认配置
+    /// </summary>
+    public static AppSettings CreateDefault() => new AppSettings();
+}
