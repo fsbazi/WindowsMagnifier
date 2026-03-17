@@ -39,6 +39,7 @@ public partial class App : System.Windows.Application
     private string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WindowsMagnifier", "error.log");
     private bool _magInitialized;
     private bool _windowsVisible = true;
+    private volatile bool _wasKeyboardMode;
     private HwndSource? _hotkeySource;
 
     private void Application_Startup(object sender, StartupEventArgs e)
@@ -441,18 +442,23 @@ public partial class App : System.Windows.Application
         {
             _displayFocusManager?.UpdateFromMousePosition(position);
 
-            // 切回鼠标模式时，清除键盘跟踪标记
-            Current.Dispatcher.BeginInvoke(() =>
+            // 只在从键盘模式切换回鼠标模式时清除键盘跟踪标记（避免每次鼠标移动都调度）
+            if (_wasKeyboardMode)
             {
-                foreach (var window in _magnifierWindows)
+                _wasKeyboardMode = false;
+                Current.Dispatcher.BeginInvoke(() =>
                 {
-                    window.ClearKeyboardTracking();
-                }
-            });
+                    foreach (var window in _magnifierWindows)
+                    {
+                        window.ClearKeyboardTracking();
+                    }
+                });
+            }
             return;
         }
 
-        // 键盘模式下才需要通过钩子传递位置
+        // 键盘模式
+        _wasKeyboardMode = true;
         Current.Dispatcher.BeginInvoke(() =>
         {
             foreach (var window in _magnifierWindows.Where(w => w.Display.DeviceName == _displayFocusManager?.ActiveDisplay?.DeviceName))
