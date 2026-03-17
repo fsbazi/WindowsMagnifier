@@ -427,7 +427,7 @@
             <!-- 按钮行 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
                 <Button Content="取消" Style="{StaticResource SecondaryButton}"
-                        Margin="0,0,10,0" Click="CancelButton_Click"/>
+                        Margin="0,0,10,0" Click="CancelButton_Click" IsCancel="True"/>
                 <Button Content="确定" Style="{StaticResource PrimaryButton}"
                         Click="OkButton_Click"/>
             </StackPanel>

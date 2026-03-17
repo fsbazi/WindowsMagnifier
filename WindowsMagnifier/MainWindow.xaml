@@ -21,6 +21,7 @@
         <Image x:Name="MagnifiedImage" Grid.Row="0"
                Stretch="Fill"
                RenderOptions.BitmapScalingMode="Fant"
+               CacheMode="BitmapCache"
                Visibility="Collapsed"/>
 
         <!-- 鼠标指针指示器 (回退模式) -->
@@ -40,13 +41,14 @@
         <!-- 非活动状态遮罩 -->
         <Grid x:Name="InactiveOverlay" Grid.Row="0" Background="Black" Visibility="Collapsed"/>
 
-        <!-- 底部边框 + 拖拽手柄 -->
-        <Border Grid.Row="1" Height="1" Background="White" Cursor="SizeNS">
-            <Grid x:Name="ResizeHandle"
-                  Background="Transparent"
-                  MouseLeftButtonDown="ResizeHandle_MouseLeftButtonDown"
-                  MouseMove="ResizeHandle_MouseMove"
-                  MouseLeftButtonUp="ResizeHandle_MouseLeftButtonUp"/>
-        </Border>
+        <!-- 底部边框 + 拖拽手柄（5px 点击区域，1px 白色分割线 + 4px 透明抓取区） -->
+        <Grid Grid.Row="1" Height="5" Cursor="SizeNS"
+              x:Name="ResizeHandle"
+              Background="Transparent"
+              MouseLeftButtonDown="ResizeHandle_MouseLeftButtonDown"
+              MouseMove="ResizeHandle_MouseMove"
+              MouseLeftButtonUp="ResizeHandle_MouseLeftButtonUp">
+            <Border Height="1" Background="White" VerticalAlignment="Top"/>
+        </Grid>
     </Grid>
 </Window>
