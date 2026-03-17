@@ -162,14 +162,7 @@ public class TrackingManager : IDisposable
     private static extern bool GetGUIThreadInfo(uint idThread, ref GUITHREADINFO lpgui);
 
     [DllImport("user32.dll")]
-    private static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
+    private static extern bool ClientToScreen(IntPtr hWnd, ref NativeTypes.POINT lpPoint);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -245,7 +238,7 @@ public class TrackingManager : IDisposable
 
                 if (GetGUIThreadInfo(threadId, ref guiInfo) && guiInfo.hwndCaret != IntPtr.Zero)
                 {
-                    var pt = new POINT
+                    var pt = new NativeTypes.POINT
                     {
                         X = guiInfo.rcCaret.Left,
                         Y = guiInfo.rcCaret.Top

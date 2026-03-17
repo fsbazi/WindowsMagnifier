@@ -461,9 +461,11 @@ public partial class App : System.Windows.Application
         _wasKeyboardMode = true;
         Current.Dispatcher.BeginInvoke(() =>
         {
-            foreach (var window in _magnifierWindows.Where(w => w.Display.DeviceName == _displayFocusManager?.ActiveDisplay?.DeviceName))
+            var activeDeviceName = _displayFocusManager?.ActiveDisplay?.DeviceName;
+            foreach (var window in _magnifierWindows)
             {
-                window.SetPosition(position);
+                if (window.Display.DeviceName == activeDeviceName)
+                    window.SetPosition(position);
             }
         });
     }

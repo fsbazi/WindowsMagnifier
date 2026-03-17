@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     private volatile bool _isKeyboardTracking;
     private int _lastCaptureX = int.MinValue;
     private int _lastCaptureY = int.MinValue;
+    private long _lastRenderTick;
+    private const long ForceRefreshIntervalTicks = 500 * TimeSpan.TicksPerMillisecond; // 500ms
 
     // Magnification API
     private IntPtr _hwndMag;
@@ -57,14 +59,7 @@ public partial class MainWindow : Window
     public DisplayInfo Display => _display;
 
     [DllImport("user32.dll")]
-    private static extern bool GetCursorPos(out POINT lpPoint);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
+    private static extern bool GetCursorPos(out NativeTypes.POINT lpPoint);
 
     public MainWindow(DisplayInfo display, AppSettings settings, bool showInTaskbar = false)
     {
@@ -394,11 +389,16 @@ public partial class MainWindow : Window
         captureX = Math.Max(screenLeft, Math.Min(screenRight - captureWidth, captureX));
         captureY = Math.Max(effectiveTop, Math.Min(screenBottom - captureHeight, captureY));
 
-        // 位置未变化时跳过渲染，避免无用的 GPU/CPU 开销
+        // 位置未变化时，检查是否超过强制刷新间隔（支持动态内容如视频/滚动）
+        var now = DateTime.UtcNow.Ticks;
         if (captureX == _lastCaptureX && captureY == _lastCaptureY)
-            return;
+        {
+            if (now - _lastRenderTick < ForceRefreshIntervalTicks)
+                return;
+        }
         _lastCaptureX = captureX;
         _lastCaptureY = captureY;
+        _lastRenderTick = now;
 
         if (_useFallback)
         {

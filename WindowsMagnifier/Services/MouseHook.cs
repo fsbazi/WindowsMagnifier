@@ -26,17 +26,6 @@ public class MouseHook : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MSLLHOOKSTRUCT
-    {
-        public int X;
-        public int Y;
-        public uint mouseData;
-        public uint flags;
-        public uint time;
-        public IntPtr dwExtraInfo;
-    }
-
     private IntPtr _hookId = IntPtr.Zero;
     private readonly LowLevelMouseProc _proc;
 
