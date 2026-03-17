@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using WindowsMagnifier.Models;
 
@@ -25,6 +27,10 @@ public class TrackingManager : IDisposable
 
     private volatile TrackingMode _currentMode = TrackingMode.Mouse;
     private Point _currentPosition;
+
+    // 防抖：键盘光标位置获取
+    private CancellationTokenSource? _caretCts;
+    private const int CaretDebounceMs = 50;
 
     /// <summary>
     /// 当前跟踪位置
@@ -101,28 +107,46 @@ public class TrackingManager : IDisposable
     {
         if (!_settings.FollowKeyboardInput) return;
 
+        // 钩子回调中只做最小工作：切换模式 + 获取鼠标位置作为即时响应
+        _currentMode = TrackingMode.KeyboardInput;
+        _currentPosition = new Point(
+            System.Windows.Forms.Control.MousePosition.X,
+            System.Windows.Forms.Control.MousePosition.Y);
+        PositionChanged?.Invoke(_currentPosition, _currentMode);
+
+        // 防抖获取 caret 位置（取消之前的请求，避免每次按键都调用 UI Automation）
+        _caretCts?.Cancel();
+        _caretCts?.Dispose();
+        _caretCts = new CancellationTokenSource();
+        var token = _caretCts.Token;
+
+        Task.Run(() => DebouncedCaretLookup(token), token);
+    }
+
+    /// <summary>
+    /// 防抖获取光标位置 - 在后台线程中延迟执行，避免阻塞键盘钩子线程
+    /// </summary>
+    private void DebouncedCaretLookup(CancellationToken token)
+    {
         try
         {
-            // 切换到键盘输入模式
-            _currentMode = TrackingMode.KeyboardInput;
+            Thread.Sleep(CaretDebounceMs);
+            if (token.IsCancellationRequested) return;
+            if (_currentMode != TrackingMode.KeyboardInput) return;
 
-            // 优先使用鼠标当前位置（更可靠）
-            _currentPosition = new Point(System.Windows.Forms.Control.MousePosition.X, System.Windows.Forms.Control.MousePosition.Y);
-
-            // 尝试获取光标位置
             if (TryGetCaretPosition(out var caretPos) &&
                 !double.IsInfinity(caretPos.X) && !double.IsInfinity(caretPos.Y) &&
                 !double.IsNaN(caretPos.X) && !double.IsNaN(caretPos.Y))
             {
+                if (token.IsCancellationRequested) return;
                 _currentPosition = caretPos;
+                PositionChanged?.Invoke(_currentPosition, TrackingMode.KeyboardInput);
             }
-
-            PositionChanged?.Invoke(_currentPosition, _currentMode);
         }
+        catch (OperationCanceledException) { }
         catch
         {
-            // 键盘跟随出错时，回退到鼠标模式
-            _currentMode = TrackingMode.Mouse;
+            // 光标位置获取失败时静默忽略，保持之前的鼠标位置
         }
     }
 
@@ -245,6 +269,8 @@ public class TrackingManager : IDisposable
 
     public void Dispose()
     {
+        _caretCts?.Cancel();
+        _caretCts?.Dispose();
         _mouseHook.Dispose();
         _keyboardHook.Dispose();
         GC.SuppressFinalize(this);

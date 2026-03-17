@@ -119,10 +119,16 @@ public class ScreenCaptureService : IDisposable
                 ReleaseDC(IntPtr.Zero, screenDC);
             }
 
-            // BitBlt 从屏幕到内存 DC
+            // BitBlt 从屏幕到内存 DC（try/finally 确保异常时也释放 DC）
             var hdcSrc = GetDC(IntPtr.Zero);
-            BitBlt(_memDC, 0, 0, width, height, hdcSrc, x, y, SRCCOPY);
-            ReleaseDC(IntPtr.Zero, hdcSrc);
+            try
+            {
+                BitBlt(_memDC, 0, 0, width, height, hdcSrc, x, y, SRCCOPY);
+            }
+            finally
+            {
+                ReleaseDC(IntPtr.Zero, hdcSrc);
+            }
 
             // 直接用 GetDIBits 将像素写入 WriteableBitmap
             _writeableBitmap.Lock();

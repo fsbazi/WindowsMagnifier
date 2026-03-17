@@ -69,10 +69,12 @@ public class MouseHook : IDisposable
     {
         if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEMOVE)
         {
-            var hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+            // 直接从内存读取 X/Y（MSLLHOOKSTRUCT 的前两个字段），避免堆分配
+            int x = Marshal.ReadInt32(lParam);
+            int y = Marshal.ReadInt32(lParam, 4);
             // 先调用 CallNextHookEx 释放钩子链，再触发事件
             var result = CallNextHookEx(_hookId, nCode, wParam, lParam);
-            MouseMoved?.Invoke(hookStruct.X, hookStruct.Y);
+            MouseMoved?.Invoke(x, y);
             return result;
         }
 

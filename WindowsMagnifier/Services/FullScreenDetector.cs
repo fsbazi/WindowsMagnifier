@@ -1,7 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Application;
 
 namespace WindowsMagnifier.Services;
 

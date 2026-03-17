@@ -14,7 +14,7 @@ public class DisplayFocusManager : IDisposable
     private readonly int _switchDelayMs;
 
     private DisplayInfo? _activeDisplay;
-    private System.Timers.Timer? _switchTimer;
+    private readonly System.Timers.Timer _switchTimer;
     private DisplayInfo? _pendingDisplay;
 
     /// <summary>
@@ -31,6 +31,9 @@ public class DisplayFocusManager : IDisposable
     {
         _displayManager = displayManager;
         _switchDelayMs = switchDelayMs;
+        _switchTimer = new System.Timers.Timer(switchDelayMs);
+        _switchTimer.AutoReset = false;
+        _switchTimer.Elapsed += OnSwitchTimerElapsed;
     }
 
     /// <summary>
@@ -46,12 +49,12 @@ public class DisplayFocusManager : IDisposable
         if (_activeDisplay != null && _activeDisplay.DeviceName == display.DeviceName)
         {
             _pendingDisplay = null;
-            _switchTimer?.Stop();
+            _switchTimer.Stop();
             return;
         }
 
         // 如果已经有切换计时器在运行，检查是否是同一个待切换显示器
-        if (_switchTimer != null && _switchTimer.Enabled)
+        if (_switchTimer.Enabled)
         {
             if (_pendingDisplay?.DeviceName == display.DeviceName)
                 return;
@@ -64,11 +67,7 @@ public class DisplayFocusManager : IDisposable
 
     private void StartSwitchTimer()
     {
-        _switchTimer?.Stop();
-        _switchTimer?.Dispose();
-        _switchTimer = new System.Timers.Timer(_switchDelayMs);
-        _switchTimer.Elapsed += OnSwitchTimerElapsed;
-        _switchTimer.AutoReset = false;
+        _switchTimer.Stop();
         _switchTimer.Start();
     }
 
@@ -97,9 +96,8 @@ public class DisplayFocusManager : IDisposable
 
     public void Dispose()
     {
-        _switchTimer?.Stop();
-        _switchTimer?.Dispose();
-        _switchTimer = null;
+        _switchTimer.Stop();
+        _switchTimer.Dispose();
         GC.SuppressFinalize(this);
     }
 }

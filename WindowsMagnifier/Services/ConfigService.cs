@@ -16,6 +16,7 @@ public class ConfigService
         "config.json"
     );
 
+    private readonly object _saveLock = new();
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true
@@ -47,20 +48,23 @@ public class ConfigService
     /// </summary>
     public void Save(AppSettings settings)
     {
-        try
+        lock (_saveLock)
         {
-            var directory = Path.GetDirectoryName(ConfigPath);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            try
             {
-                Directory.CreateDirectory(directory);
-            }
+                var directory = Path.GetDirectoryName(ConfigPath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
 
-            var json = JsonSerializer.Serialize(settings, _jsonOptions);
-            File.WriteAllText(ConfigPath, json);
-        }
-        catch
-        {
-            // 忽略保存错误，不影响应用运行
+                var json = JsonSerializer.Serialize(settings, _jsonOptions);
+                File.WriteAllText(ConfigPath, json);
+            }
+            catch
+            {
+                // 忽略保存错误，不影响应用运行
+            }
         }
     }
 }
