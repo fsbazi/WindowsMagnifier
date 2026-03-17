@@ -111,12 +111,27 @@ public class ScreenCaptureService : IDisposable
             {
                 CleanupGdiResources();
                 var screenDC = GetDC(IntPtr.Zero);
-                _memDC = CreateCompatibleDC(screenDC);
-                _memBitmap = CreateCompatibleBitmap(screenDC, width, height);
-                _oldBitmap = SelectObject(_memDC, _memBitmap);
-                _memWidth = width;
-                _memHeight = height;
-                ReleaseDC(IntPtr.Zero, screenDC);
+                try
+                {
+                    _memDC = CreateCompatibleDC(screenDC);
+                    if (_memDC == IntPtr.Zero) return null;
+
+                    _memBitmap = CreateCompatibleBitmap(screenDC, width, height);
+                    if (_memBitmap == IntPtr.Zero)
+                    {
+                        DeleteDC(_memDC);
+                        _memDC = IntPtr.Zero;
+                        return null;
+                    }
+
+                    _oldBitmap = SelectObject(_memDC, _memBitmap);
+                    _memWidth = width;
+                    _memHeight = height;
+                }
+                finally
+                {
+                    ReleaseDC(IntPtr.Zero, screenDC);
+                }
             }
 
             // BitBlt 从屏幕到内存 DC（try/finally 确保异常时也释放 DC）
@@ -157,8 +172,9 @@ public class ScreenCaptureService : IDisposable
 
             return _writeableBitmap;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ScreenCapture] CaptureRegion error: {ex.Message}");
             return null;
         }
     }

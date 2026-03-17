@@ -37,8 +37,9 @@ public class ConfigService
             var json = File.ReadAllText(ConfigPath);
             return JsonSerializer.Deserialize<AppSettings>(json) ?? AppSettings.CreateDefault();
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[Config] Load error: {ex.Message}");
             return AppSettings.CreateDefault();
         }
     }
@@ -61,9 +62,9 @@ public class ConfigService
                 var json = JsonSerializer.Serialize(settings, _jsonOptions);
                 File.WriteAllText(ConfigPath, json);
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略保存错误，不影响应用运行
+                System.Diagnostics.Debug.WriteLine($"[Config] Save error: {ex.Message}");
             }
         }
     }

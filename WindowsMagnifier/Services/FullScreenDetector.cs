@@ -13,7 +13,6 @@ public class FullScreenDetector : IDisposable
     private readonly int _pollIntervalMs;
     private System.Timers.Timer? _pollTimer;
     private bool _isFullScreenActive;
-    private IntPtr _lastHwnd;
 
     /// <summary>
     /// 当前是否检测到全屏应用
@@ -85,10 +84,6 @@ public class FullScreenDetector : IDisposable
     {
         var hwnd = GetForegroundWindow();
         if (hwnd == IntPtr.Zero) return;
-
-        // 窗口未变化且非全屏状态，跳过
-        if (hwnd == _lastHwnd && !_isFullScreenActive) return;
-        _lastHwnd = hwnd;
 
         bool isFullScreen = CheckFullScreen(hwnd);
 

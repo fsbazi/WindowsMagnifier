@@ -221,9 +221,10 @@ public class TrackingManager : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
             // UI Automation 失败，继续尝试后备方案
+            System.Diagnostics.Debug.WriteLine($"[Tracking] UI Automation error: {ex.Message}");
         }
 
         try
@@ -252,9 +253,9 @@ public class TrackingManager : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 忽略错误
+            System.Diagnostics.Debug.WriteLine($"[Tracking] GetGUIThreadInfo error: {ex.Message}");
         }
 
         return false;
