@@ -404,10 +404,11 @@ public partial class App : System.Windows.Application
     private void OnDisplaysChanged()
     {
         // 显示器配置变化，重建窗口
-        Current.Dispatcher.Invoke(() =>
+        Current.Dispatcher.BeginInvoke(() =>
         {
             foreach (var window in _magnifierWindows)
             {
+                window.SettingsRequested -= ShowSettingsWindow;
                 window.Close();
             }
             _magnifierWindows.Clear();
@@ -420,10 +421,7 @@ public partial class App : System.Windows.Application
 
     private void OnActiveDisplayChanged(DisplayInfo? activeDisplay)
     {
-        Current.Dispatcher.Invoke(() =>
-        {
-            UpdateActiveDisplay(activeDisplay);
-        });
+        UpdateActiveDisplay(activeDisplay);
     }
 
     private void UpdateActiveDisplay(DisplayInfo? activeDisplay)

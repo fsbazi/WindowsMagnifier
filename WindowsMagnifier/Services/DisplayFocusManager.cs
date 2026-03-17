@@ -79,7 +79,7 @@ public class DisplayFocusManager : IDisposable
         _pendingDisplay = null;
 
         // 在 UI 线程上触发事件
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
             ActiveDisplayChanged?.Invoke(_activeDisplay);
         });

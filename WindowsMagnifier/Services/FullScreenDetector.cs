@@ -90,7 +90,7 @@ public class FullScreenDetector : IDisposable
         if (isFullScreen != _isFullScreenActive)
         {
             _isFullScreenActive = isFullScreen;
-            Application.Current?.Dispatcher.Invoke(() =>
+            Application.Current?.Dispatcher.BeginInvoke(() =>
             {
                 FullScreenStateChanged?.Invoke(isFullScreen);
             });
