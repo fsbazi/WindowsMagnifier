@@ -101,12 +101,9 @@ public class ScreenCaptureService : IDisposable
                 _writeableBitmap = new WriteableBitmap(width, height, 96, 96, PixelFormats.Bgra32, null);
                 _cachedWidth = width;
                 _cachedHeight = height;
-
-                // 重建 GDI 资源
-                CleanupGdiResources();
             }
 
-            // 懒创建持久化 GDI 资源
+            // 懒创建持久化 GDI 资源（尺寸变化时重建）
             if (_memDC == IntPtr.Zero || _memWidth != width || _memHeight != height)
             {
                 CleanupGdiResources();
