@@ -48,7 +48,7 @@ public partial class App : System.Windows.Application
         _mutex = new Mutex(true, MutexName, out var createdNew);
         if (!createdNew)
         {
-            System.Windows.MessageBox.Show("放大镜已在运行中。", "Windows 放大镜", MessageBoxButton.OK, MessageBoxImage.Information);
+            System.Windows.MessageBox.Show("眼眸已在运行中。", "眼眸", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -212,13 +212,13 @@ public partial class App : System.Windows.Application
         catch { }
 
         System.Windows.MessageBox.Show(
-            "欢迎使用 Windows 放大镜！\n\n" +
+            "欢迎使用眼眸！\n\n" +
             "使用提示：\n" +
-            "  - 右键点击放大镜窗口可打开设置或退出\n" +
+            "  - 右键点击窗口可打开设置或退出\n" +
             "  - Win + Alt + M 快捷键可切换显示/隐藏\n" +
             "  - 拖拽底部边框可调整窗口高度\n" +
             "  - 每个显示器可独立设置放大倍数",
-            "Windows 放大镜 v1.0",
+            "眼眸 v1.0",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }

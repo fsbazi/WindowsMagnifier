@@ -108,8 +108,8 @@ public partial class MainWindow : Window
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         var versionStr = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
         System.Windows.MessageBox.Show(
-            $"Windows 放大镜 v{versionStr}\n\n" +
-            "Windows 桌面放大镜 - 无障碍辅助工具\n\n" +
+            $"眼眸 v{versionStr}\n\n" +
+            "眼眸 - 桌面放大辅助工具\n\n" +
             "快捷键：Win + Alt + M 切换显示/隐藏\n" +
             "右键菜单：设置 / 关于 / 退出",
             "关于",

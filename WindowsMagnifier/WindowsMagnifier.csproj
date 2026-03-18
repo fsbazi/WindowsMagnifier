@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <AssemblyName>WindowsMagnifier</AssemblyName>
+    <AssemblyName>眼眸</AssemblyName>
     <RootNamespace>WindowsMagnifier</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitor</ApplicationHighDpiMode>
@@ -16,8 +16,8 @@
     <Version>1.0.0</Version>
     <FileVersion>1.0.0.0</FileVersion>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <Product>Windows 放大镜</Product>
-    <Description>Windows 桌面放大镜 - 无障碍辅助工具</Description>
+    <Product>眼眸</Product>
+    <Description>眼眸 - 桌面放大辅助工具</Description>
     <Company>WindowsMagnifier</Company>
     <Copyright>Copyright (c) 2026</Copyright>
 

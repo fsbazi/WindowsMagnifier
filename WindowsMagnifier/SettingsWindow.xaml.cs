@@ -2,13 +2,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using WindowsMagnifier.Models;
 using WindowsMagnifier.Services;
 
 namespace WindowsMagnifier;
 
 /// <summary>
-/// 设置窗口
+/// 设置窗口 — 橙红渐变毛玻璃发光风格，所有修改即时生效并自动保存
 /// </summary>
 public partial class SettingsWindow : Window
 {
@@ -16,15 +20,7 @@ public partial class SettingsWindow : Window
     private readonly ConfigService _configService;
     private readonly List<DisplayInfo> _displays;
     private bool _isLoading = true;
-
-    // 备份原始设置值（用于取消时恢复）
-    private readonly int _backupMagnificationLevel;
-    private readonly Dictionary<string, int>? _backupDisplayMagnificationLevels;
-    private readonly int _backupWindowHeight;
-    private readonly bool _backupFollowMouse;
-    private readonly bool _backupFollowKeyboardInput;
-    private readonly bool _backupStartMinimized;
-    private readonly bool _backupHideOnFullScreen;
+    private readonly DispatcherTimer _saveDebounce;
 
     public SettingsWindow(AppSettings settings, ConfigService configService, List<DisplayInfo> displays)
     {
@@ -34,16 +30,26 @@ public partial class SettingsWindow : Window
         _configService = configService;
         _displays = displays;
 
-        // 备份当前设置
-        _backupMagnificationLevel = settings.MagnificationLevel;
-        _backupDisplayMagnificationLevels = settings.DisplayMagnificationLevels != null
-            ? new Dictionary<string, int>(settings.DisplayMagnificationLevels)
-            : null;
-        _backupWindowHeight = settings.WindowHeight;
-        _backupFollowMouse = settings.FollowMouse;
-        _backupFollowKeyboardInput = settings.FollowKeyboardInput;
-        _backupStartMinimized = settings.StartMinimized;
-        _backupHideOnFullScreen = settings.HideOnFullScreen;
+        // 无论如何关闭窗口都应通知调用方刷新（因为设置已即时保存）
+        Closing += (_, _) =>
+        {
+            if (DialogResult == null)
+                DialogResult = true;
+        };
+
+        // Escape 键关闭窗口
+        KeyDown += (_, args) =>
+        {
+            if (args.Key == System.Windows.Input.Key.Escape)
+            {
+                DialogResult = true;
+                Close();
+            }
+        };
+
+        // Slider 保存防抖：拖拽期间只更新设置值，300ms 无变化后再写磁盘
+        _saveDebounce = new DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(300) };
+        _saveDebounce.Tick += (_, _) => { _saveDebounce.Stop(); _configService.Save(_settings); };
 
         // 加载当前设置到 UI
         LoadSettings();
@@ -52,7 +58,7 @@ public partial class SettingsWindow : Window
 
     private void LoadSettings()
     {
-        // 动态生成每显示器的放大倍数下拉框
+        // 动态生成每显示器的放大倍数行
         DisplayMagnificationPanel.Children.Clear();
         foreach (var display in _displays)
         {
@@ -60,41 +66,104 @@ public partial class SettingsWindow : Window
                 ? $"显示器 {display.Index + 1} (主) - {(int)display.Bounds.Width}x{(int)display.Bounds.Height}"
                 : $"显示器 {display.Index + 1} - {(int)display.Bounds.Width}x{(int)display.Bounds.Height}";
 
-            var grid = new Grid { Margin = new Thickness(0, 0, 0, 5) };
+            var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var textBlock = new TextBlock
             {
                 Text = label,
-                Foreground = System.Windows.Media.Brushes.White,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center
             };
             grid.Children.Add(textBlock);
 
+            // 渐变 Badge 显示倍数
+            var currentLevel = _settings.GetMagnificationLevel(display.DeviceName);
+
+            var badgeBorder = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(12, 4, 12, 4),
+                Cursor = Cursors.Hand,
+                Background = new LinearGradientBrush(
+                    Color.FromRgb(0xFF, 0x6B, 0x35),
+                    Color.FromRgb(0xE8, 0x31, 0x3A),
+                    0),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = Color.FromRgb(0xFF, 0x6B, 0x35),
+                    BlurRadius = 8,
+                    ShadowDepth = 0,
+                    Opacity = 0.4
+                }
+            };
+
+            var badgeText = new TextBlock
+            {
+                Text = $"{currentLevel}x",
+                Foreground = Brushes.White,
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            badgeBorder.Child = badgeText;
+
+            // ComboBox 隐藏在 Badge 后面
             var comboBox = new ComboBox
             {
                 Width = 80,
                 Tag = display.DeviceName,
                 ItemsSource = Enumerable.Range(1, 16).ToList(),
-                SelectedItem = _settings.GetMagnificationLevel(display.DeviceName)
+                SelectedItem = currentLevel,
+                Opacity = 0,
+                IsHitTestVisible = false
             };
-            comboBox.SelectionChanged += DisplayMagnification_Changed;
-            Grid.SetColumn(comboBox, 1);
-            grid.Children.Add(comboBox);
+            comboBox.SelectionChanged += (s, e) =>
+            {
+                DisplayMagnification_Changed(s, e);
+                if (comboBox.SelectedItem is int level)
+                {
+                    badgeText.Text = $"{level}x";
+                }
+            };
+
+            // 点击 Badge 打开下拉
+            badgeBorder.MouseLeftButtonDown += (_, _) =>
+            {
+                comboBox.IsDropDownOpen = true;
+            };
+
+            // 使用一个 Grid 叠加 badge 和 combo
+            var badgeContainer = new Grid();
+            badgeContainer.Children.Add(comboBox);
+            badgeContainer.Children.Add(badgeBorder);
+
+            Grid.SetColumn(badgeContainer, 1);
+            grid.Children.Add(badgeContainer);
 
             DisplayMagnificationPanel.Children.Add(grid);
         }
 
         HeightSlider.Value = _settings.WindowHeight;
-        FollowMouseCheckBox.IsChecked = _settings.FollowMouse;
-        FollowKeyboardInputCheckBox.IsChecked = _settings.FollowKeyboardInput;
+        FollowMouseButton.IsChecked = _settings.FollowMouse;
+        FollowKeyboardButton.IsChecked = _settings.FollowKeyboardInput;
         StartMinimizedCheckBox.IsChecked = _settings.StartMinimized;
         HideOnFullScreenCheckBox.IsChecked = _settings.HideOnFullScreen;
 
-        // 手动更新标签文本（_isLoading 阻止了 ValueChanged 事件）
+        // 手动更新标签文本
         HeightValue.Text = _settings.WindowHeight.ToString();
+    }
+
+    /// <summary>
+    /// 即时保存当前设置
+    /// </summary>
+    private void SaveNow()
+    {
+        _configService.Save(_settings);
     }
 
     private void DisplayMagnification_Changed(object sender, SelectionChangedEventArgs e)
@@ -104,6 +173,7 @@ public partial class SettingsWindow : Window
         var deviceName = (string)comboBox.Tag;
         var level = (int)comboBox.SelectedItem;
         _settings.SetMagnificationLevel(deviceName, level);
+        SaveNow();
     }
 
     private void HeightSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -112,48 +182,54 @@ public partial class SettingsWindow : Window
         var value = (int)e.NewValue;
         HeightValue.Text = value.ToString();
         _settings.WindowHeight = value;
+        // 防抖保存：拖拽期间只更新设置值，停止拖拽后 300ms 才写磁盘
+        _saveDebounce.Stop();
+        _saveDebounce.Start();
     }
 
-    private void FollowMode_Changed(object sender, RoutedEventArgs e)
+    private void FollowMouseButton_Changed(object sender, RoutedEventArgs e)
     {
         if (_isLoading) return;
-        _settings.FollowMouse = FollowMouseCheckBox.IsChecked ?? false;
-        _settings.FollowKeyboardInput = FollowKeyboardInputCheckBox.IsChecked ?? false;
+        _settings.FollowMouse = FollowMouseButton.IsChecked ?? false;
+        SaveNow();
+    }
+
+    private void FollowKeyboardButton_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_isLoading) return;
+        _settings.FollowKeyboardInput = FollowKeyboardButton.IsChecked ?? false;
+        SaveNow();
     }
 
     private void StartMinimized_Changed(object sender, RoutedEventArgs e)
     {
         if (_isLoading) return;
         _settings.StartMinimized = StartMinimizedCheckBox.IsChecked ?? false;
+        SaveNow();
     }
 
     private void HideOnFullScreen_Changed(object sender, RoutedEventArgs e)
     {
         if (_isLoading) return;
         _settings.HideOnFullScreen = HideOnFullScreenCheckBox.IsChecked ?? true;
+        SaveNow();
     }
 
-    private void OkButton_Click(object sender, RoutedEventArgs e)
+    private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
-        _configService.Save(_settings);
+        // 设置已即时保存，直接关闭并通知调用方刷新
         DialogResult = true;
         Close();
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 无边框窗口拖拽移动
+    /// </summary>
+    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        // 还原备份值
-        _settings.MagnificationLevel = _backupMagnificationLevel;
-        _settings.DisplayMagnificationLevels = _backupDisplayMagnificationLevels != null
-            ? new Dictionary<string, int>(_backupDisplayMagnificationLevels)
-            : null;
-        _settings.WindowHeight = _backupWindowHeight;
-        _settings.FollowMouse = _backupFollowMouse;
-        _settings.FollowKeyboardInput = _backupFollowKeyboardInput;
-        _settings.StartMinimized = _backupStartMinimized;
-        _settings.HideOnFullScreen = _backupHideOnFullScreen;
-
-        DialogResult = false;
-        Close();
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            DragMove();
+        }
     }
 }

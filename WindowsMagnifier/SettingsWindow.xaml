@@ -1,70 +1,213 @@
 <Window x:Class="WindowsMagnifier.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="放大镜设置"
+        Title="眼眸设置"
         Width="420" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Background="#18181E"
-        BorderBrush="#8B1E3C"
-        BorderThickness="1">
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent">
 
     <Window.Resources>
 
-        <!-- ── 颜色定义 ── -->
-        <SolidColorBrush x:Key="BgWindow"      Color="#18181E"/>
-        <SolidColorBrush x:Key="BgCard"        Color="#212129"/>
-        <SolidColorBrush x:Key="BgInput"       Color="#2A2A35"/>
-        <SolidColorBrush x:Key="BgInputHover"  Color="#32323F"/>
-        <SolidColorBrush x:Key="AccentWine"    Color="#8B1E3C"/>
-        <SolidColorBrush x:Key="AccentHover"   Color="#A8253F"/>
-        <SolidColorBrush x:Key="AccentPressed" Color="#6B1630"/>
-        <SolidColorBrush x:Key="AccentMuted"   Color="#3D1020"/>
-        <SolidColorBrush x:Key="BorderColor"   Color="#353545"/>
-        <SolidColorBrush x:Key="TextPrimary"   Color="#F0EFF5"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#8888A0"/>
-        <SolidColorBrush x:Key="TextMuted"     Color="#555568"/>
+        <!-- ── 配色定义 ── -->
+        <Color x:Key="BgDark1">#1a1a24</Color>
+        <Color x:Key="BgDark2">#201218</Color>
+        <Color x:Key="AccentOrange">#FF6B35</Color>
+        <Color x:Key="AccentRed">#E8313A</Color>
+        <Color x:Key="AccentLabel">#FF8C42</Color>
+
+        <SolidColorBrush x:Key="TextPrimary"   Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#777777"/>
+        <SolidColorBrush x:Key="TextMuted"     Color="#555555"/>
+        <SolidColorBrush x:Key="LabelOrange"   Color="#FF8C42"/>
+        <SolidColorBrush x:Key="TrackBg"       Color="#2a2a38"/>
+        <SolidColorBrush x:Key="ToggleOffBg"   Color="#3a3a48"/>
+        <SolidColorBrush x:Key="ToggleOffThumb" Color="#666666"/>
+
+        <!-- 橙红渐变画刷 -->
+        <LinearGradientBrush x:Key="OrangeRedGradient" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#FF6B35" Offset="0"/>
+            <GradientStop Color="#E8313A" Offset="1"/>
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="OrangeRedGradientVertical" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF6B35" Offset="0"/>
+            <GradientStop Color="#E8313A" Offset="1"/>
+        </LinearGradientBrush>
+
+        <!-- 卡片背景 (半透明橙色) -->
+        <SolidColorBrush x:Key="CardBg" Color="#0AFF6B35"/>
+        <SolidColorBrush x:Key="CardBorder" Color="#1FFF783C"/>
+        <SolidColorBrush x:Key="CardBorderHover" Color="#40FF783C"/>
 
         <!-- ── Section 标题样式 ── -->
         <Style x:Key="SectionLabel" TargetType="TextBlock">
-            <Setter Property="Foreground"  Value="#8B1E3C"/>
-            <Setter Property="FontSize"    Value="11"/>
-            <Setter Property="FontWeight"  Value="SemiBold"/>
-            <Setter Property="Margin"      Value="0,0,0,8"/>
+            <Setter Property="Foreground"     Value="{StaticResource LabelOrange}"/>
+            <Setter Property="FontSize"       Value="10"/>
+            <Setter Property="FontWeight"     Value="Bold"/>
+            <Setter Property="Margin"         Value="0,0,0,12"/>
         </Style>
 
-        <!-- ── 普通文本样式 ── -->
-        <Style x:Key="BodyText" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="FontSize"   Value="13"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-
-        <!-- ── 数值标签 ── -->
-        <Style x:Key="ValueLabel" TargetType="TextBlock">
-            <Setter Property="Foreground"     Value="{StaticResource AccentWine}"/>
-            <Setter Property="FontSize"       Value="13"/>
-            <Setter Property="FontWeight"     Value="SemiBold"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="MinWidth"       Value="36"/>
-            <Setter Property="TextAlignment"  Value="Right"/>
+        <!-- ── 描述文字样式 ── -->
+        <Style x:Key="DescText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Margin"     Value="0,2,0,0"/>
         </Style>
 
         <!-- ── 卡片面板样式 ── -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background"    Value="{StaticResource BgCard}"/>
-            <Setter Property="BorderBrush"   Value="{StaticResource BorderColor}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius"  Value="8"/>
-            <Setter Property="Padding"       Value="16,14"/>
-            <Setter Property="Margin"        Value="0,0,0,10"/>
+            <Setter Property="Background"      Value="{StaticResource CardBg}"/>
+            <Setter Property="BorderBrush"      Value="{StaticResource CardBorder}"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="CornerRadius"     Value="10"/>
+            <Setter Property="Padding"          Value="18,16"/>
+            <Setter Property="Margin"           Value="0,0,0,12"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource CardBorderHover}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
-        <!-- ── ComboBox ── -->
+        <!-- ── Toggle Switch 样式 (CheckBox 模板) ── -->
+        <Style x:Key="ToggleSwitch" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- 左侧内容 -->
+                            <ContentPresenter Grid.Column="0" VerticalAlignment="Center"/>
+
+                            <!-- 右侧 Toggle Switch -->
+                            <Grid Grid.Column="1" Width="44" Height="24" Margin="12,0,0,0">
+                                <!-- 背景轨道 -->
+                                <Border x:Name="SwitchTrack"
+                                        CornerRadius="12"
+                                        Background="{StaticResource ToggleOffBg}"/>
+                                <!-- 发光效果 (仅开启时可见) -->
+                                <Border x:Name="SwitchGlow"
+                                        CornerRadius="12"
+                                        Opacity="0">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#FF6B35" Offset="0"/>
+                                            <GradientStop Color="#E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#FF6B35" BlurRadius="10"
+                                                          ShadowDepth="0" Opacity="0.5"/>
+                                    </Border.Effect>
+                                </Border>
+                                <!-- 圆点 -->
+                                <Canvas ClipToBounds="False">
+                                    <Ellipse x:Name="SwitchThumb"
+                                             Width="18" Height="18"
+                                             Canvas.Top="3"
+                                             Canvas.Left="4"
+                                             Fill="#666666"/>
+                                </Canvas>
+                            </Grid>
+                        </Grid>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SwitchGlow" Property="Opacity" Value="1"/>
+                                <Setter TargetName="SwitchTrack" Property="Opacity" Value="0"/>
+                                <Setter TargetName="SwitchThumb" Property="Canvas.Left" Value="22"/>
+                                <Setter TargetName="SwitchThumb" Property="Fill" Value="White"/>
+                                <Setter TargetName="SwitchThumb" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#FF6B35" BlurRadius="8"
+                                                          ShadowDepth="0" Opacity="0.6"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── 跟随模式按钮样式 (未选中) ── -->
+        <Style x:Key="FollowModeButton" TargetType="ToggleButton">
+            <Setter Property="Background"      Value="#15FFFFFF"/>
+            <Setter Property="Foreground"       Value="{StaticResource TextSecondary}"/>
+            <Setter Property="BorderBrush"      Value="#25FFFFFF"/>
+            <Setter Property="BorderThickness"  Value="1"/>
+            <Setter Property="FontSize"         Value="13"/>
+            <Setter Property="Height"           Value="38"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bg"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                Padding="16,0">
+                            <Border.Effect>
+                                <DropShadowEffect x:Name="BgShadow" Color="#FF6B35"
+                                                  BlurRadius="0" ShadowDepth="0" Opacity="0"/>
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bg" Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#20FF6B35" Offset="0"/>
+                                            <GradientStop Color="#20E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="Bg" Property="BorderBrush">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#80FF6B35" Offset="0"/>
+                                            <GradientStop Color="#80E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter Property="Foreground" Value="#CCCCCC"/>
+                                <Setter TargetName="Bg" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect Color="#FF6B35" BlurRadius="12"
+                                                          ShadowDepth="0" Opacity="0.3"/>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="BorderBrush">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#50FF6B35" Offset="0"/>
+                                            <GradientStop Color="#50E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── ComboBox 样式 ── -->
         <ControlTemplate x:Key="ComboBoxToggleButton" TargetType="ToggleButton">
-            <Border Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="5">
+            <Border Background="Transparent" BorderThickness="0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition/>
@@ -80,21 +223,24 @@
         </ControlTemplate>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Background"           Value="{StaticResource BgInput}"/>
-            <Setter Property="Foreground"           Value="{StaticResource TextPrimary}"/>
-            <Setter Property="BorderBrush"          Value="{StaticResource BorderColor}"/>
-            <Setter Property="BorderThickness"      Value="1"/>
-            <Setter Property="Height"               Value="32"/>
-            <Setter Property="Width"                Value="70"/>
-            <Setter Property="FontSize"             Value="13"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background"                 Value="#15FFFFFF"/>
+            <Setter Property="Foreground"                 Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush"                Value="#25FFFFFF"/>
+            <Setter Property="BorderThickness"            Value="1"/>
+            <Setter Property="Height"                     Value="32"/>
+            <Setter Property="Width"                      Value="70"/>
+            <Setter Property="FontSize"                   Value="13"/>
+            <Setter Property="VerticalContentAlignment"   Value="Center"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
+                            <Border x:Name="ComboBoxBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="6"/>
                             <ToggleButton Template="{StaticResource ComboBoxToggleButton}"
-                                          Background="{TemplateBinding Background}"
-                                          BorderBrush="{TemplateBinding BorderBrush}"
                                           IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay,
                                                       RelativeSource={RelativeSource TemplatedParent}}"/>
                             <ContentPresenter Margin="10,0,28,0"
@@ -104,10 +250,20 @@
                             <Popup IsOpen="{TemplateBinding IsDropDownOpen}"
                                    AllowsTransparency="True" Focusable="False"
                                    PopupAnimation="Slide" Placement="Bottom">
-                                <Border Background="{StaticResource BgCard}"
-                                        BorderBrush="{StaticResource AccentWine}"
-                                        BorderThickness="1" CornerRadius="6"
-                                        MaxHeight="200" MinWidth="{TemplateBinding ActualWidth}">
+                                <Border Background="#FF1a1a24"
+                                        BorderThickness="1" CornerRadius="8"
+                                        MaxHeight="200" MinWidth="{TemplateBinding ActualWidth}"
+                                        Padding="2">
+                                    <Border.BorderBrush>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#60FF6B35" Offset="0"/>
+                                            <GradientStop Color="#60E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Border.BorderBrush>
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#FF6B35" BlurRadius="15"
+                                                          ShadowDepth="0" Opacity="0.2"/>
+                                    </Border.Effect>
                                     <ScrollViewer>
                                         <ItemsPresenter/>
                                     </ScrollViewer>
@@ -116,7 +272,14 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="BorderBrush" Value="{StaticResource AccentWine}"/>
+                                <Setter TargetName="ComboBoxBorder" Property="BorderBrush">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#60FF6B35" Offset="0"/>
+                                            <GradientStop Color="#60E8313A" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -132,17 +295,18 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBoxItem">
-                        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="ItemBorder" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="4">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{StaticResource AccentMuted}"/>
-                                <Setter Property="Foreground" Value="{StaticResource AccentHover}"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#20FF6B35"/>
+                                <Setter Property="Foreground" Value="#FF8C42"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter Property="Background" Value="{StaticResource AccentMuted}"/>
-                                <Setter Property="Foreground" Value="{StaticResource AccentWine}"/>
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#15FF6B35"/>
+                                <Setter Property="Foreground" Value="#FF6B35"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -150,7 +314,7 @@
             </Setter>
         </Style>
 
-        <!-- ── Slider ── -->
+        <!-- ── Slider 样式 ── -->
         <Style TargetType="Slider">
             <Setter Property="Template">
                 <Setter.Value>
@@ -166,8 +330,14 @@
                                     <RepeatButton Command="Slider.DecreaseLarge">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Height="4" Background="{StaticResource AccentWine}"
-                                                        CornerRadius="2"/>
+                                                <Border Height="4" CornerRadius="2">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                            <GradientStop Color="#FF6B35" Offset="0"/>
+                                                            <GradientStop Color="#E8313A" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                </Border>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -176,7 +346,7 @@
                                     <RepeatButton Command="Slider.IncreaseLarge">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Height="4" Background="{StaticResource BgInput}"
+                                                <Border Height="4" Background="{StaticResource TrackBg}"
                                                         CornerRadius="2"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
@@ -186,14 +356,30 @@
                                     <Thumb>
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
-                                                <Ellipse Width="16" Height="16"
-                                                         Fill="{StaticResource AccentWine}"
-                                                         Stroke="#C0305A" StrokeThickness="1.5">
-                                                    <Ellipse.Effect>
-                                                        <DropShadowEffect Color="#8B1E3C" BlurRadius="6"
-                                                                          ShadowDepth="0" Opacity="0.6"/>
-                                                    </Ellipse.Effect>
-                                                </Ellipse>
+                                                <Grid>
+                                                    <!-- 外发光 -->
+                                                    <Ellipse Width="22" Height="22" Opacity="0.3">
+                                                        <Ellipse.Fill>
+                                                            <RadialGradientBrush>
+                                                                <GradientStop Color="#FF6B35" Offset="0.3"/>
+                                                                <GradientStop Color="Transparent" Offset="1"/>
+                                                            </RadialGradientBrush>
+                                                        </Ellipse.Fill>
+                                                    </Ellipse>
+                                                    <!-- 主圆点 -->
+                                                    <Ellipse Width="16" Height="16">
+                                                        <Ellipse.Fill>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#FF6B35" Offset="0"/>
+                                                                <GradientStop Color="#E8313A" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Ellipse.Fill>
+                                                        <Ellipse.Effect>
+                                                            <DropShadowEffect Color="#FF6B35" BlurRadius="10"
+                                                                              ShadowDepth="0" Opacity="0.7"/>
+                                                        </Ellipse.Effect>
+                                                    </Ellipse>
+                                                </Grid>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
                                                         <Setter Property="Cursor" Value="Hand"/>
@@ -210,228 +396,241 @@
             </Setter>
         </Style>
 
-        <!-- ── CheckBox ── -->
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="FontSize"   Value="13"/>
-            <Setter Property="Margin"     Value="0,0,0,8"/>
-            <Setter Property="Cursor"     Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border x:Name="CheckBorder"
-                                    Width="18" Height="18" CornerRadius="4"
-                                    Background="{StaticResource BgInput}"
-                                    BorderBrush="{StaticResource BorderColor}"
-                                    BorderThickness="1.5"
-                                    Margin="0,0,10,0">
-                                <Path x:Name="CheckMark"
-                                      Data="M 2 8 L 6 13 L 14 4"
-                                      Stroke="{StaticResource TextPrimary}"
-                                      StrokeThickness="2"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      Visibility="Collapsed"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                            </Border>
-                            <ContentPresenter VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="CheckBorder" Property="Background"
-                                        Value="{StaticResource AccentWine}"/>
-                                <Setter TargetName="CheckBorder" Property="BorderBrush"
-                                        Value="{StaticResource AccentWine}"/>
-                                <Setter TargetName="CheckMark" Property="Visibility"
-                                        Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="CheckBorder" Property="BorderBrush"
-                                        Value="{StaticResource AccentWine}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── 主按钮（确定） ── -->
-        <Style x:Key="PrimaryButton" TargetType="Button">
-            <Setter Property="Background"       Value="{StaticResource AccentWine}"/>
-            <Setter Property="Foreground"       Value="{StaticResource TextPrimary}"/>
-            <Setter Property="BorderThickness"  Value="0"/>
-            <Setter Property="FontSize"         Value="13"/>
-            <Setter Property="FontWeight"       Value="SemiBold"/>
-            <Setter Property="Height"           Value="36"/>
-            <Setter Property="Width"            Value="90"/>
-            <Setter Property="Cursor"           Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="7">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background"
-                                        Value="{StaticResource AccentHover}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bg" Property="Background"
-                                        Value="{StaticResource AccentPressed}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ── 次按钮（取消） ── -->
-        <Style x:Key="SecondaryButton" TargetType="Button">
-            <Setter Property="Background"      Value="Transparent"/>
-            <Setter Property="Foreground"      Value="{StaticResource TextSecondary}"/>
-            <Setter Property="BorderBrush"     Value="{StaticResource BorderColor}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontSize"        Value="13"/>
-            <Setter Property="Height"          Value="36"/>
-            <Setter Property="Width"           Value="90"/>
-            <Setter Property="Cursor"          Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bg"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="BorderBrush"
-                                        Value="{StaticResource AccentWine}"/>
-                                <Setter Property="Foreground"
-                                        Value="{StaticResource TextPrimary}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bg" Property="Background"
-                                        Value="{StaticResource AccentMuted}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
     </Window.Resources>
 
-    <!-- ── 主布局 ── -->
-    <Grid Background="{StaticResource BgWindow}">
-        <StackPanel Margin="20,0,20,20">
+    <!-- ── 窗口外壳：圆角 + 阴影 ── -->
+    <Border CornerRadius="12" Margin="16"
+            BorderThickness="1">
+        <Border.BorderBrush>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#30FF6B35" Offset="0"/>
+                <GradientStop Color="#18E8313A" Offset="0.5"/>
+                <GradientStop Color="#10FF6B35" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.BorderBrush>
+        <Border.Effect>
+            <DropShadowEffect Color="#FF6B35" BlurRadius="30"
+                              ShadowDepth="0" Opacity="0.15"/>
+        </Border.Effect>
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#1a1a24" Offset="0"/>
+                <GradientStop Color="#201218" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
 
-            <!-- 标题栏 -->
-            <Border BorderBrush="{StaticResource AccentWine}"
-                    BorderThickness="0,0,0,1" Margin="-20,0,-20,20" Padding="20,18,20,16">
+        <!-- 裁剪圆角内容 -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 拖拽条 (用于无边框窗口移动) -->
+            <Border Grid.Row="0" Grid.RowSpan="2" Background="Transparent"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
+                    Panel.ZIndex="-1"/>
+
+            <!-- ── 毛玻璃标题区 ── -->
+            <Border Grid.Row="0" Padding="24,22,24,18">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.5">
+                        <GradientStop Color="#18FF6B35" Offset="0"/>
+                        <GradientStop Color="#10E8313A" Offset="0.5"/>
+                        <GradientStop Color="#08FF6B35" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
                 <Grid>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <!-- 酒红竖线装饰 -->
-                        <Border Width="3" Height="20" CornerRadius="2"
-                                Background="{StaticResource AccentWine}" Margin="0,0,12,0"/>
-                        <TextBlock Text="放大镜设置"
-                                   Foreground="{StaticResource TextPrimary}"
-                                   FontSize="16" FontWeight="SemiBold"/>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <!-- 装饰线 -->
+                        <Border Height="2" Width="40" HorizontalAlignment="Left"
+                                CornerRadius="1" Margin="0,0,0,12">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                    <GradientStop Color="#E8313A" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <!-- 标题 (渐变文字) -->
+                        <TextBlock FontSize="20" FontWeight="Bold" Margin="0,0,0,6">
+                            <TextBlock.Foreground>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                    <GradientStop Color="#E8313A" Offset="1"/>
+                                </LinearGradientBrush>
+                            </TextBlock.Foreground>
+                            眼眸设置
+                        </TextBlock>
+                        <!-- 副标题 -->
+                        <TextBlock Text="自定义眼眸行为和外观"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"/>
                     </StackPanel>
+                    <!-- 关闭按钮 -->
+                    <Button Grid.Column="1" VerticalAlignment="Top"
+                            Width="28" Height="28" Cursor="Hand"
+                            Click="CloseButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="CloseBg" Background="Transparent"
+                                        CornerRadius="6">
+                                    <Path Data="M 6 6 L 14 14 M 14 6 L 6 14"
+                                          Stroke="{StaticResource TextSecondary}"
+                                          StrokeThickness="1.5"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Width="20" Height="20"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="CloseBg" Property="Background" Value="#20FFFFFF"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                 </Grid>
             </Border>
 
-            <!-- 卡片：放大倍数 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="放大倍数" Style="{StaticResource SectionLabel}"/>
-                    <StackPanel x:Name="DisplayMagnificationPanel"/>
-                </StackPanel>
-            </Border>
+            <!-- ── 滚动内容区 ── -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          Padding="24,4,24,20">
 
-            <!-- 卡片：窗口高度 -->
-            <Border Style="{StaticResource Card}">
                 <StackPanel>
-                    <TextBlock Text="窗口高度" Style="{StaticResource SectionLabel}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Slider x:Name="HeightSlider"
-                                Minimum="100" Maximum="600"
-                                TickFrequency="10"
-                                IsSnapToTickEnabled="True"
-                                VerticalAlignment="Center"
-                                ValueChanged="HeightSlider_ValueChanged"/>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                    Margin="14,0,0,0" VerticalAlignment="Center">
-                            <TextBlock x:Name="HeightValue" Text="300"
-                                       Style="{StaticResource ValueLabel}"/>
-                            <TextBlock Text=" px" Foreground="{StaticResource TextMuted}"
-                                       FontSize="12" VerticalAlignment="Center"/>
+
+                    <!-- ===== 卡片：放大倍数 ===== -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="放大倍数" Style="{StaticResource SectionLabel}"/>
+                            <StackPanel x:Name="DisplayMagnificationPanel"/>
                         </StackPanel>
-                    </Grid>
+                    </Border>
+
+                    <!-- ===== 卡片：窗口高度 ===== -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="窗口高度" Style="{StaticResource SectionLabel}"/>
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Slider x:Name="HeightSlider"
+                                        Minimum="100" Maximum="600"
+                                        TickFrequency="10"
+                                        IsSnapToTickEnabled="True"
+                                        VerticalAlignment="Center"
+                                        ValueChanged="HeightSlider_ValueChanged"/>
+                                <Border Grid.Column="1" Margin="14,0,0,0"
+                                        CornerRadius="6" Padding="10,4"
+                                        Background="#10FFFFFF">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock x:Name="HeightValue" Text="300"
+                                                   FontSize="14" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center">
+                                            <TextBlock.Foreground>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#FF6B35" Offset="0"/>
+                                                    <GradientStop Color="#E8313A" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </TextBlock.Foreground>
+                                        </TextBlock>
+                                        <TextBlock Text=" px" Foreground="{StaticResource TextMuted}"
+                                                   FontSize="12" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== 卡片：跟随模式 ===== -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="跟随模式" Style="{StaticResource SectionLabel}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton x:Name="FollowMouseButton"
+                                              Grid.Column="0"
+                                              Content="鼠标指针"
+                                              Style="{StaticResource FollowModeButton}"
+                                              Checked="FollowMouseButton_Changed"
+                                              Unchecked="FollowMouseButton_Changed"/>
+                                <ToggleButton x:Name="FollowKeyboardButton"
+                                              Grid.Column="2"
+                                              Content="键盘输入"
+                                              Style="{StaticResource FollowModeButton}"
+                                              Checked="FollowKeyboardButton_Changed"
+                                              Unchecked="FollowKeyboardButton_Changed"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== 卡片：其他选项 ===== -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="其他选项" Style="{StaticResource SectionLabel}"/>
+
+                            <!-- 启动后最小化 -->
+                            <CheckBox x:Name="StartMinimizedCheckBox"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      Margin="0,0,0,14"
+                                      Checked="StartMinimized_Changed"
+                                      Unchecked="StartMinimized_Changed">
+                                <StackPanel>
+                                    <TextBlock Text="启动后最小化"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="13"/>
+                                    <TextBlock Text="程序启动时自动收入系统托盘"
+                                               Style="{StaticResource DescText}"/>
+                                </StackPanel>
+                            </CheckBox>
+
+                            <!-- 全屏时自动隐藏 -->
+                            <CheckBox x:Name="HideOnFullScreenCheckBox"
+                                      Style="{StaticResource ToggleSwitch}"
+                                      Checked="HideOnFullScreen_Changed"
+                                      Unchecked="HideOnFullScreen_Changed">
+                                <StackPanel>
+                                    <TextBlock Text="全屏时自动隐藏"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="13"/>
+                                    <TextBlock Text="检测到全屏应用时自动隐藏"
+                                               Style="{StaticResource DescText}"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ===== 底部提示 ===== -->
+                    <StackPanel Orientation="Horizontal" Margin="4,4,0,4"
+                                VerticalAlignment="Center">
+                        <!-- 小橙色发光圆点 -->
+                        <Ellipse Width="6" Height="6" Margin="0,1,8,0"
+                                 VerticalAlignment="Center">
+                            <Ellipse.Fill>
+                                <SolidColorBrush Color="#FF6B35"/>
+                            </Ellipse.Fill>
+                            <Ellipse.Effect>
+                                <DropShadowEffect Color="#FF6B35" BlurRadius="6"
+                                                  ShadowDepth="0" Opacity="0.8"/>
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <TextBlock Text="设置修改即时生效，自动保存"
+                                   Foreground="{StaticResource TextMuted}"
+                                   FontSize="11"/>
+                    </StackPanel>
+
                 </StackPanel>
-            </Border>
-
-            <!-- 卡片：跟随模式 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="跟随模式" Style="{StaticResource SectionLabel}"/>
-                    <CheckBox x:Name="FollowMouseCheckBox"
-                              Content="跟随鼠标指针"
-                              Checked="FollowMode_Changed"
-                              Unchecked="FollowMode_Changed"/>
-                    <CheckBox x:Name="FollowKeyboardInputCheckBox"
-                              Content="跟随键盘输入"
-                              Margin="0,0,0,0"
-                              Checked="FollowMode_Changed"
-                              Unchecked="FollowMode_Changed"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 卡片：启动选项 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="启动选项" Style="{StaticResource SectionLabel}"/>
-                    <CheckBox x:Name="StartMinimizedCheckBox"
-                              Content="启动后最小化"
-                              Margin="0,0,0,0"
-                              Checked="StartMinimized_Changed"
-                              Unchecked="StartMinimized_Changed"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 卡片：全屏检测 -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="全屏检测" Style="{StaticResource SectionLabel}"/>
-                    <CheckBox x:Name="HideOnFullScreenCheckBox"
-                              Content="全屏应用时自动隐藏放大镜"
-                              Margin="0,0,0,0"
-                              Checked="HideOnFullScreen_Changed"
-                              Unchecked="HideOnFullScreen_Changed"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 按钮行 -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,6,0,0">
-                <Button Content="取消" Style="{StaticResource SecondaryButton}"
-                        Margin="0,0,10,0" Click="CancelButton_Click" IsCancel="True"/>
-                <Button Content="确定" Style="{StaticResource PrimaryButton}"
-                        Click="OkButton_Click"/>
-            </StackPanel>
-
-        </StackPanel>
-    </Grid>
+            </ScrollViewer>
+        </Grid>
+    </Border>
 </Window>

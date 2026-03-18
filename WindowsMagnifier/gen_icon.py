@@ -1,15 +1,16 @@
-"""Generate a wine-red themed magnifier icon for the WindowsMagnifier app."""
+"""Generate an orange-red gradient themed magnifier icon for the 眼眸 app."""
 import struct
 import math
 import zlib
 
-# ── 主题色 ──────────────────────────────────────────────
-BG_DARK    = (0x18, 0x18, 0x1E)   # 深色背景
-WINE_DARK  = (0x5C, 0x14, 0x28)   # 酒红暗色
-WINE_MID   = (0x8B, 0x1E, 0x3C)   # 酒红主色
-WINE_LIGHT = (0xC0, 0x30, 0x5A)   # 酒红亮色
-GLASS_BG   = (0x22, 0x22, 0x2E)   # 镜片内部深色
-WHITE      = (0xFF, 0xFF, 0xFF)
+# ── 主题色（橙红渐变）─────────────────────────────────────
+BG_DARK      = (0x1A, 0x1A, 0x24)   # 深色背景（与新 UI 一致）
+ORANGE_DARK  = (0xB0, 0x30, 0x20)   # 橙红暗色
+ORANGE_MID   = (0xFF, 0x6B, 0x35)   # 橙色主色
+ORANGE_LIGHT = (0xFF, 0x8C, 0x42)   # 橙色亮色
+RED_ACCENT   = (0xE8, 0x31, 0x3A)   # 红色点缀
+GLASS_BG     = (0x22, 0x22, 0x2E)   # 镜片内部深色
+WHITE        = (0xFF, 0xFF, 0xFF)
 
 def lerp(a, b, t):
     return a + (b - a) * t
@@ -70,16 +71,16 @@ def create_png(size):
                 gc = tuple(int(GLASS_BG[i] + (0x30 * rad_t)) for i in range(3))
                 r, g, b = blend(gc, int(lens_a * 200), (r, g, b))
 
-            # ── 镜框（酒红环）──
+            # ── 镜框（橙红渐变环）──
             in_ring = (ring_r - aa < dist < ring_r + aa) or (lens_r - aa < dist < lens_r + aa)
             ring_inner_a = smooth_step(lens_r - aa, lens_r + aa, dist)  # 内边
             ring_outer_a = smooth_step(ring_r + aa, ring_r - aa, dist)  # 外边
             ring_mask = ring_outer_a * (1.0 - ring_inner_a)
             if ring_mask > 0.01:
-                # 镜框渐变：顶部偏亮，底部偏暗（金属感）
+                # 镜框渐变：从橙色过渡到红色（顶部橙色亮，底部红色暗）
                 angle = math.atan2(dy, dx)
                 t_shine = 0.5 + 0.5 * math.cos(angle - math.pi * 1.25)
-                rc = tuple(int(lerp(WINE_DARK[i], WINE_LIGHT[i], t_shine * 0.6)) for i in range(3))
+                rc = tuple(int(lerp(RED_ACCENT[i], ORANGE_LIGHT[i], t_shine * 0.6)) for i in range(3))
                 r, g, b = blend(rc, int(ring_mask * 255), (r, g, b))
 
             # ── 镜框高光（左上弧）──
@@ -111,8 +112,8 @@ def create_png(size):
                 dist_h = math.hypot(px - proj_x, py - proj_y)
                 handle_a = smooth_step(hwid + aa, hwid - aa, dist_h)
                 if handle_a > 0:
-                    # 把手颜色渐变：近端酒红，末端暗色
-                    hc = tuple(int(lerp(WINE_LIGHT[i], WINE_DARK[i], t_h * 0.7)) for i in range(3))
+                    # 把手颜色渐变：近端橙色，末端橙红暗色
+                    hc = tuple(int(lerp(ORANGE_LIGHT[i], ORANGE_DARK[i], t_h * 0.7)) for i in range(3))
                     # 把手高光
                     hl_h = max(0.0, 1.0 - (dist_h / hwid)) * 0.35
                     hc = tuple(int(min(255, hc[i] + 40 * hl_h)) for i in range(3))
