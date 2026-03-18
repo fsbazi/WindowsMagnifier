@@ -108,16 +108,10 @@ public class TrackingManager : IDisposable
     {
         if (!_settings.FollowKeyboardInput) return;
 
-        // 钩子回调中只做最小工作：切换模式 + 获取鼠标位置作为即时响应
+        // 钩子回调中只做最小工作：启动后台 caret 查找
+        // 不立即切换模式或更新位置，避免 caret 获取失败时放大镜闪烁
         // 注意：不在钩子线程中调用任何跨进程 API（包括 ImmGetContext），
         // 否则前台窗口忙时会阻塞钩子线程导致全系统输入冻结
-        _currentMode = TrackingMode.KeyboardInput;
-        _currentPosition = new Point(
-            System.Windows.Forms.Control.MousePosition.X,
-            System.Windows.Forms.Control.MousePosition.Y);
-        PositionChanged?.Invoke(_currentPosition, _currentMode);
-
-        // 防抖获取 caret 位置（原子替换，避免竞态）
         var newCts = new CancellationTokenSource();
         var oldCts = Interlocked.Exchange(ref _caretCts, newCts);
         oldCts?.Cancel();
@@ -135,7 +129,6 @@ public class TrackingManager : IDisposable
         try
         {
             await Task.Delay(CaretDebounceMs, token);
-            if (_currentMode != TrackingMode.KeyboardInput) return;
 
             // IME 合成期间再次检测，防止防抖延迟期间开始合成
             if (IsImeComposing()) return;
@@ -155,6 +148,8 @@ public class TrackingManager : IDisposable
                 !double.IsNaN(result.Position.X) && !double.IsNaN(result.Position.Y))
             {
                 if (token.IsCancellationRequested) return;
+                // 只在成功获取 caret 位置后才切换到键盘模式
+                _currentMode = TrackingMode.KeyboardInput;
                 _currentPosition = result.Position;
                 PositionChanged?.Invoke(_currentPosition, TrackingMode.KeyboardInput);
             }
