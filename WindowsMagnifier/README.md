@@ -14,7 +14,7 @@
 
 ### 设置界面
 
-![眼眸设置界面](docs/settings-screenshot.png)
+![眼眸设置界面](settings-screenshot.png)
 
 ### 主要特性
 
@@ -84,7 +84,7 @@ Compared to the built-in Windows Magnifier, the key advantage of this applicatio
 
 ### Settings UI
 
-![EyeMo Settings](docs/settings-screenshot.png)
+![EyeMo Settings](settings-screenshot.png)
 
 ### Key Features
 
