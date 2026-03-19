@@ -36,6 +36,10 @@ public partial class App : System.Windows.Application
     private TrackingManager? _trackingManager;
     private FullScreenDetector? _fullScreenDetector;
     private readonly List<MainWindow> _magnifierWindows = new();
+    /// <summary>
+    /// 因全屏而被隐藏的显示器设备名集合（与用户手动隐藏区分）
+    /// </summary>
+    private readonly HashSet<string> _fullScreenHiddenDisplays = new();
     private string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WindowsMagnifier", "error.log");
     private bool _magInitialized;
     private bool _windowsVisible = true;
@@ -89,7 +93,7 @@ public partial class App : System.Windows.Application
             if (_settings.HideOnFullScreen)
             {
                 _fullScreenDetector = new FullScreenDetector(_displayManager);
-                _fullScreenDetector.FullScreenStateChanged += OnFullScreenStateChanged;
+                _fullScreenDetector.DisplayFullScreenStateChanged += OnDisplayFullScreenStateChanged;
                 _fullScreenDetector.Start();
                 LogMessage("FullScreenDetector started");
             }
@@ -179,6 +183,7 @@ public partial class App : System.Windows.Application
     {
         if (_windowsVisible)
         {
+            // 用户手动隐藏：全部隐藏
             foreach (var window in _magnifierWindows)
             {
                 window.Hide();
@@ -187,8 +192,15 @@ public partial class App : System.Windows.Application
         }
         else
         {
-            ShowAllWindows();
+            // 用户手动显示：恢复非全屏显示器的窗口，仍在全屏的不恢复
             _windowsVisible = true;
+            foreach (var window in _magnifierWindows)
+            {
+                if (!_fullScreenHiddenDisplays.Contains(window.Display.DeviceName))
+                {
+                    window.Show();
+                }
+            }
         }
     }
 
@@ -323,9 +335,15 @@ public partial class App : System.Windows.Application
 
         try
         {
-            // 先确保窗口已显示
-            ShowAllWindows();
+            // 先确保窗口已显示（跳过因全屏而隐藏的显示器）
             _windowsVisible = true;
+            foreach (var window in _magnifierWindows)
+            {
+                if (!_fullScreenHiddenDisplays.Contains(window.Display.DeviceName))
+                {
+                    window.Show();
+                }
+            }
 
             var displays = _displayManager!.GetDisplays();
             var settingsWindow = new SettingsWindow(_settings!, _configService!, displays);
@@ -368,7 +386,7 @@ public partial class App : System.Windows.Application
             if (_fullScreenDetector == null)
             {
                 _fullScreenDetector = new FullScreenDetector(_displayManager!);
-                _fullScreenDetector.FullScreenStateChanged += OnFullScreenStateChanged;
+                _fullScreenDetector.DisplayFullScreenStateChanged += OnDisplayFullScreenStateChanged;
             }
             _fullScreenDetector.Start();
         }
@@ -376,30 +394,38 @@ public partial class App : System.Windows.Application
         {
             _fullScreenDetector?.Stop();
             // 如果之前因全屏隐藏了窗口，恢复显示
-            if (!_windowsVisible && _fullScreenDetector?.IsFullScreenActive == true)
+            if (_fullScreenHiddenDisplays.Count > 0)
             {
-                ShowAllWindows();
-                _windowsVisible = true;
+                if (_windowsVisible)
+                {
+                    foreach (var displayName in _fullScreenHiddenDisplays)
+                    {
+                        var window = _magnifierWindows.FirstOrDefault(w => w.Display.DeviceName == displayName);
+                        window?.Show();
+                    }
+                }
+                _fullScreenHiddenDisplays.Clear();
             }
         }
     }
 
-    private void OnFullScreenStateChanged(bool isFullScreen)
+    private void OnDisplayFullScreenStateChanged(string displayName, bool isFullScreen)
     {
         if (isFullScreen)
         {
-            // 全屏应用激活，隐藏放大镜窗口
-            foreach (var window in _magnifierWindows)
-            {
-                window.Hide();
-            }
+            // 该显示器全屏，隐藏对应的放大镜窗口
+            _fullScreenHiddenDisplays.Add(displayName);
+            var window = _magnifierWindows.FirstOrDefault(w => w.Display.DeviceName == displayName);
+            window?.Hide();
         }
         else
         {
-            // 全屏应用退出，恢复放大镜窗口
+            // 该显示器退出全屏，恢复对应的放大镜窗口（仅当用户未手动隐藏时）
+            _fullScreenHiddenDisplays.Remove(displayName);
             if (_windowsVisible)
             {
-                ShowAllWindows();
+                var window = _magnifierWindows.FirstOrDefault(w => w.Display.DeviceName == displayName);
+                window?.Show();
             }
         }
     }
@@ -417,6 +443,7 @@ public partial class App : System.Windows.Application
                 window.Close();
             }
             _magnifierWindows.Clear();
+            _fullScreenHiddenDisplays.Clear();
 
             CreateMagnifierWindows();
             ShowAllWindows();
