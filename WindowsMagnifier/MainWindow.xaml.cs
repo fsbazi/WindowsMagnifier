@@ -356,11 +356,14 @@ public partial class MainWindow : Window
             // 直接获取最新鼠标位置
             if (GetCursorPos(out var pt))
             {
-                _lastPosition = new Point(pt.X, pt.Y);
+                var newPos = new Point(pt.X, pt.Y);
+                if (newPos != _lastPosition)
+                {
+                    _lastPosition = newPos;
+                    // 将显示器焦点更新从钩子线程移到渲染循环中执行
+                    _onDisplayFocusUpdate?.Invoke(_lastPosition);
+                }
                 _hasPosition = true;
-
-                // 将显示器焦点更新从钩子线程移到渲染循环中执行
-                _onDisplayFocusUpdate?.Invoke(_lastPosition);
             }
         }
 

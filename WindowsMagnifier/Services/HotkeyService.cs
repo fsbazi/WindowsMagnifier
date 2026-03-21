@@ -54,7 +54,7 @@ public class HotkeyService : IDisposable
             }
             else
             {
-                _log.LogError("Global hotkey Win+Alt+M registered");
+                _log.LogDebug("Global hotkey Win+Alt+M registered");
             }
         }
         catch (Exception ex)

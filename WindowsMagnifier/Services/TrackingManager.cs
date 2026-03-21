@@ -216,7 +216,10 @@ public class TrackingManager : IDisposable
 
         // 快速路径：Win32 GetGUIThreadInfo（适用于记事本等传统应用）
         if (TryGetCaretViaWin32(out position))
+        {
+            Interlocked.Exchange(ref _consecutiveUiaTimeouts, 0);
             return true;
+        }
 
         // 回退路径：UI Automation（适用于 Chrome、Edge、VS Code 等现代应用）
         if (TryGetCaretViaUIAutomation(out position))

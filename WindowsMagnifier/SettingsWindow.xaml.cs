@@ -33,6 +33,8 @@ public partial class SettingsWindow : Window
         // 无论如何关闭窗口都应通知调用方刷新（因为设置已即时保存）
         Closing += (_, _) =>
         {
+            _saveDebounce.Stop();
+            _configService.Save(_settings);
             if (DialogResult == null)
                 DialogResult = true;
         };
