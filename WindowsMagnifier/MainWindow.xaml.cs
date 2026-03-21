@@ -217,6 +217,13 @@ public partial class MainWindow : Window
             {
                 Log($"MagSetWindowFilterList failed, error: {Marshal.GetLastWin32Error()}");
             }
+
+            // Airspace 修复：如果当前窗口非活动，隐藏刚创建的 Magnifier 子窗口
+            // （CreateWindowEx 带 WS_VISIBLE，但非活动窗口需要隐藏子窗口让 InactiveOverlay 生效）
+            if (!_isActive)
+            {
+                ShowWindow(_hwndMag, SW_HIDE);
+            }
         }
         catch (Exception ex)
         {
