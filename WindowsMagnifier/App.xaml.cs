@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
-using System.Windows.Interop;
 using WindowsMagnifier.Models;
 using WindowsMagnifier.Services;
 
@@ -14,19 +13,7 @@ namespace WindowsMagnifier;
 public partial class App : System.Windows.Application
 {
     private const string MutexName = "WindowsMagnifier_SingleInstance_B7F3A2E1";
-    private const int HOTKEY_ID = 0x4D41; // 'MA'
-    private const int MOD_ALT = 0x0001;
-    private const int MOD_WIN = 0x0008;
-    private const int MOD_NOREPEAT = 0x4000;
-    private const int WM_HOTKEY = 0x0312;
-    private const int VK_M = 0x4D;
     private static readonly LogService _log = LogService.Instance;
-
-    [DllImport("user32.dll")]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
-
-    [DllImport("user32.dll")]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private Mutex? _mutex;
     private ConfigService? _configService;
@@ -35,6 +22,7 @@ public partial class App : System.Windows.Application
     private DisplayFocusManager? _displayFocusManager;
     private TrackingManager? _trackingManager;
     private FullScreenDetector? _fullScreenDetector;
+    private HotkeyService? _hotkeyService;
     private readonly List<MainWindow> _magnifierWindows = new();
     /// <summary>
     /// 因全屏而被隐藏的显示器设备名集合（与用户手动隐藏区分）
@@ -44,7 +32,6 @@ public partial class App : System.Windows.Application
     private bool _magInitialized;
     private bool _windowsVisible = true;
     private volatile bool _wasKeyboardMode;
-    private HwndSource? _hotkeySource;
 
     private void Application_Startup(object sender, StartupEventArgs e)
     {
@@ -125,7 +112,9 @@ public partial class App : System.Windows.Application
             }
 
             // 注册全局快捷键 Win+Alt+M
-            RegisterGlobalHotkey();
+            _hotkeyService = new HotkeyService();
+            _hotkeyService.HotkeyTriggered += ToggleVisibility;
+            _hotkeyService.Register();
 
             // 首次启动引导
             ShowFirstRunGuide();
@@ -139,45 +128,6 @@ public partial class App : System.Windows.Application
     }
 
     #region 全局快捷键
-
-    private void RegisterGlobalHotkey()
-    {
-        try
-        {
-            // 创建一个隐藏窗口接收快捷键消息
-            var parameters = new HwndSourceParameters("HotkeyWindow")
-            {
-                Width = 0,
-                Height = 0,
-                WindowStyle = 0
-            };
-            _hotkeySource = new HwndSource(parameters);
-            _hotkeySource.AddHook(HotkeyWndProc);
-
-            if (!RegisterHotKey(_hotkeySource.Handle, HOTKEY_ID, MOD_WIN | MOD_ALT | MOD_NOREPEAT, VK_M))
-            {
-                _log.LogError($"RegisterHotKey failed, error: {Marshal.GetLastWin32Error()}");
-            }
-            else
-            {
-                _log.LogError("Global hotkey Win+Alt+M registered");
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.LogError($"RegisterGlobalHotkey exception: {ex.Message}");
-        }
-    }
-
-    private IntPtr HotkeyWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
-        {
-            ToggleVisibility();
-            handled = true;
-        }
-        return IntPtr.Zero;
-    }
 
     private void ToggleVisibility()
     {
@@ -474,12 +424,7 @@ public partial class App : System.Windows.Application
     private void Application_Exit(object sender, ExitEventArgs e)
     {
         // 注销全局快捷键
-        if (_hotkeySource != null)
-        {
-            UnregisterHotKey(_hotkeySource.Handle, HOTKEY_ID);
-            _hotkeySource.Dispose();
-            _hotkeySource = null;
-        }
+        _hotkeyService?.Dispose();
 
         // 保存配置
         if (_settings != null && _configService != null)
