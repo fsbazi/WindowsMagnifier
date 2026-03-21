@@ -31,4 +31,8 @@
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="WindowsMagnifier.Tests" />
+  </ItemGroup>
+
 </Project>
