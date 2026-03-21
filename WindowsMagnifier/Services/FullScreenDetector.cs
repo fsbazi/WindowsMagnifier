@@ -204,12 +204,33 @@ public class FullScreenDetector : IDisposable
         }
     }
 
+    // 系统窗口类名白名单，这些窗口覆盖整个屏幕但不是全屏应用
+    private static readonly HashSet<string> _systemWindowClasses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Progman",           // Windows 桌面
+        "WorkerW",           // 桌面工作线程窗口
+        "Shell_TrayWnd",     // 任务栏
+        "Shell_SecondaryTrayWnd", // 副屏任务栏
+    };
+
+    /// <summary>
+    /// 检查窗口是否为系统桌面/任务栏等不应被视为全屏的窗口
+    /// </summary>
+    private static bool IsSystemWindow(IntPtr hwnd)
+    {
+        var sb = new StringBuilder(64);
+        GetClassName(hwnd, sb, sb.Capacity);
+        return _systemWindowClasses.Contains(sb.ToString());
+    }
+
     /// <summary>
     /// 找到指定窗口全屏所在的显示器，如果不是全屏则返回 null
     /// </summary>
     private DisplayInfo? FindFullScreenDisplay(IntPtr hwnd, List<DisplayInfo> displays)
     {
         if (!IsWindowVisible(hwnd)) return null;
+        // 排除系统窗口（桌面、任务栏等覆盖整屏但不是全屏应用）
+        if (IsSystemWindow(hwnd)) return null;
         // 排除虚拟桌面上被 cloaked 的窗口（在其他桌面上不可见但 IsWindowVisible 仍返回 TRUE）
         if (IsWindowCloaked(hwnd)) return null;
         if (!GetWindowRect(hwnd, out var rect)) return null;
@@ -234,6 +255,7 @@ public class FullScreenDetector : IDisposable
     private bool CheckFullScreenForDisplay(IntPtr hwnd, DisplayInfo display)
     {
         if (!IsWindowVisible(hwnd)) return false;
+        if (IsSystemWindow(hwnd)) return false;
         if (IsWindowCloaked(hwnd)) return false;
         if (!GetWindowRect(hwnd, out var rect)) return false;
 
