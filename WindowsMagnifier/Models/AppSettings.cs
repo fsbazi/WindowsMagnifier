@@ -73,7 +73,7 @@ public class AppSettings
     public void SetMagnificationLevel(string deviceName, int level)
     {
         DisplayMagnificationLevels ??= new Dictionary<string, int>();
-        DisplayMagnificationLevels[deviceName] = level;
+        DisplayMagnificationLevels[deviceName] = Math.Clamp(level, 1, 16);
     }
 
     /// <summary>
