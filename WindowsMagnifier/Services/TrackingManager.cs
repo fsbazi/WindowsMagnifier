@@ -33,6 +33,12 @@ public class TrackingManager : IDisposable
     private const int CaretDebounceMs = 30;
     private const int CaretTimeoutMs = 500;
 
+    // UIA 连续超时降级
+    private volatile int _consecutiveUiaTimeouts;
+    private long _uiaDisabledUntilTicks;
+    private const int MaxConsecutiveTimeouts = 3;
+    private const long UiaBackoffTicks = 10 * TimeSpan.TicksPerSecond;
+
     /// <summary>
     /// 当前跟踪位置
     /// </summary>
@@ -150,6 +156,7 @@ public class TrackingManager : IDisposable
                 !double.IsInfinity(result.Position.X) && !double.IsInfinity(result.Position.Y) &&
                 !double.IsNaN(result.Position.X) && !double.IsNaN(result.Position.Y))
             {
+                Interlocked.Exchange(ref _consecutiveUiaTimeouts, 0);
                 // 只在成功获取 caret 位置后才切换到键盘模式
                 _currentMode = TrackingMode.KeyboardInput;
                 _currentPosition = result.Position;
@@ -160,6 +167,12 @@ public class TrackingManager : IDisposable
         {
             // 超时：光标获取耗时过长（可能 IME 阻塞），静默跳过
             System.Diagnostics.Debug.WriteLine("[Tracking] TryGetCaretPosition timed out");
+            var timeouts = Interlocked.Increment(ref _consecutiveUiaTimeouts);
+            if (timeouts >= MaxConsecutiveTimeouts)
+            {
+                Interlocked.Exchange(ref _uiaDisabledUntilTicks,
+                    DateTime.UtcNow.Ticks + UiaBackoffTicks);
+            }
         }
         catch
         {
@@ -274,6 +287,10 @@ public class TrackingManager : IDisposable
     private bool TryGetCaretViaUIAutomation(out Point position)
     {
         position = new Point();
+
+        if (DateTime.UtcNow.Ticks < Interlocked.Read(ref _uiaDisabledUntilTicks))
+            return false;
+
         try
         {
             var focused = System.Windows.Automation.AutomationElement.FocusedElement;
