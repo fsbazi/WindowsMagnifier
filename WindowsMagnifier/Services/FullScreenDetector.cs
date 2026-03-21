@@ -235,21 +235,27 @@ public class FullScreenDetector : IDisposable
     }
 
     /// <summary>
-    /// 检查窗口的尺寸和位置是否匹配指定显示器（全屏检测）。
+    /// 纯计算的全屏匹配逻辑，不依赖 P/Invoke，便于单元测试。
     /// 无边框窗口精确匹配屏幕尺寸即判定为全屏；
     /// 有边框窗口（如 Chrome F11、VLC）允许窗口覆盖或超出屏幕边界也判定为全屏。
     /// </summary>
-    private bool CheckWindowMatchesDisplay(RECT rect, int width, int height, IntPtr hwnd, DisplayInfo display)
+    internal static bool IsFullScreenMatch(
+        int windowLeft, int windowTop, int windowRight, int windowBottom,
+        int windowStyle,
+        double boundsLeft, double boundsTop, double boundsWidth, double boundsHeight)
     {
-        var bounds = display.Bounds;
-        var style = GetWindowLong(hwnd, GWL_STYLE);
-        bool hasCaptionStyle = (style & WS_CAPTION) != 0;
+        int width = windowRight - windowLeft;
+        int height = windowBottom - windowTop;
+        double boundsRight = boundsLeft + boundsWidth;
+        double boundsBottom = boundsTop + boundsHeight;
+
+        bool hasCaptionStyle = (windowStyle & WS_CAPTION) != 0;
 
         // 严格匹配：窗口尺寸和位置精确覆盖屏幕（允许 2px 误差）
-        bool sizeMatchesExact = Math.Abs(width - bounds.Width) <= 2 &&
-                                Math.Abs(height - bounds.Height) <= 2;
-        bool positionMatchesExact = Math.Abs(rect.Left - bounds.Left) <= 2 &&
-                                     Math.Abs(rect.Top - bounds.Top) <= 2;
+        bool sizeMatchesExact = Math.Abs(width - boundsWidth) <= 2 &&
+                                Math.Abs(height - boundsHeight) <= 2;
+        bool positionMatchesExact = Math.Abs(windowLeft - boundsLeft) <= 2 &&
+                                     Math.Abs(windowTop - boundsTop) <= 2;
 
         if (sizeMatchesExact && positionMatchesExact)
         {
@@ -260,22 +266,36 @@ public class FullScreenDetector : IDisposable
         if (hasCaptionStyle)
         {
             // 排除最大化窗口（有 WS_CAPTION + WS_MAXIMIZE 的是普通最大化，非全屏）
-            bool isMaximized = (style & WS_MAXIMIZE) != 0;
+            bool isMaximized = (windowStyle & WS_MAXIMIZE) != 0;
             if (isMaximized) return false;
 
             // 有边框的全屏窗口（如 Chrome F11）可能比屏幕稍大（负偏移隐藏边框），
             // 检查窗口是否覆盖了整个屏幕区域
-            bool coversScreen = rect.Left <= (int)bounds.Left &&
-                                rect.Top <= (int)bounds.Top &&
-                                rect.Right >= (int)bounds.Right &&
-                                rect.Bottom >= (int)bounds.Bottom;
+            bool coversScreen = windowLeft <= (int)boundsLeft &&
+                                windowTop <= (int)boundsTop &&
+                                windowRight >= (int)boundsRight &&
+                                windowBottom >= (int)boundsBottom;
             // 但窗口不应比屏幕大太多（超过 20px 说明不是全屏，排除普通最大化窗口）
-            bool notTooLarge = width <= bounds.Width + 20 &&
-                               height <= bounds.Height + 20;
+            bool notTooLarge = width <= boundsWidth + 20 &&
+                               height <= boundsHeight + 20;
             return coversScreen && notTooLarge;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 检查窗口的尺寸和位置是否匹配指定显示器（全屏检测）。
+    /// 委托给 IsFullScreenMatch 进行纯计算。
+    /// </summary>
+    private bool CheckWindowMatchesDisplay(RECT rect, int width, int height, IntPtr hwnd, DisplayInfo display)
+    {
+        var bounds = display.Bounds;
+        var style = GetWindowLong(hwnd, GWL_STYLE);
+        return IsFullScreenMatch(
+            rect.Left, rect.Top, rect.Right, rect.Bottom,
+            style,
+            bounds.Left, bounds.Top, bounds.Width, bounds.Height);
     }
 
     /// <summary>
