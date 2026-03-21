@@ -21,6 +21,7 @@ public class FullScreenDetector : IDisposable
     /// </summary>
     private readonly Dictionary<string, IntPtr> _fullScreenWindows = new();
     private readonly object _lock = new();
+    private volatile bool _stopped;
 
     /// <summary>
     /// 当前是否有任一显示器处于全屏状态
@@ -97,6 +98,7 @@ public class FullScreenDetector : IDisposable
     public void Start()
     {
         if (_pollTimer != null) return;
+        _stopped = false;
 
         _pollTimer = new System.Timers.Timer(_pollIntervalMs);
         _pollTimer.AutoReset = false; // 防止重入
@@ -109,6 +111,7 @@ public class FullScreenDetector : IDisposable
     /// </summary>
     public void Stop()
     {
+        _stopped = true;
         _pollTimer?.Stop();
         _pollTimer?.Dispose();
         _pollTimer = null;
@@ -188,7 +191,7 @@ public class FullScreenDetector : IDisposable
         {
             // 无论是否异常，始终重启 timer（AutoReset=false 防重入）
             // 确保全屏检测不会因异常而永久停止
-            _pollTimer?.Start();
+            if (!_stopped) _pollTimer?.Start();
         }
     }
 
