@@ -364,6 +364,17 @@ public partial class App : System.Windows.Application
             _fullScreenHiddenDisplays.Clear();
 
             CreateMagnifierWindows();
+
+            // 重新初始化显示器焦点管理（旧的 _activeDisplay 可能指向已不存在的显示器）
+            _displayFocusManager?.Initialize();
+
+            // 重置全屏检测状态（旧的 displayName 可能已失效）
+            if (_fullScreenDetector != null)
+            {
+                _fullScreenDetector.Stop();
+                _fullScreenDetector.Start();
+            }
+
             ShowAllWindows();
             _windowsVisible = true;
         });
