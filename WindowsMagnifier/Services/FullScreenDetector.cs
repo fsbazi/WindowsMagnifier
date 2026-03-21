@@ -59,7 +59,7 @@ public class FullScreenDetector : IDisposable
     private static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeTypes.RECT lpRect);
 
     [DllImport("user32.dll")]
     private static extern bool IsWindowVisible(IntPtr hWnd);
@@ -74,15 +74,6 @@ public class FullScreenDetector : IDisposable
     private const int WS_CAPTION = 0x00C00000;
     private const int WS_MAXIMIZE = 0x01000000;
     private const int DWMWA_CLOAKED = 14;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 
     #endregion
 
@@ -288,7 +279,7 @@ public class FullScreenDetector : IDisposable
     /// 检查窗口的尺寸和位置是否匹配指定显示器（全屏检测）。
     /// 委托给 IsFullScreenMatch 进行纯计算。
     /// </summary>
-    private bool CheckWindowMatchesDisplay(RECT rect, int width, int height, IntPtr hwnd, DisplayInfo display)
+    private bool CheckWindowMatchesDisplay(NativeTypes.RECT rect, int width, int height, IntPtr hwnd, DisplayInfo display)
     {
         var bounds = display.Bounds;
         var style = GetWindowLong(hwnd, GWL_STYLE);

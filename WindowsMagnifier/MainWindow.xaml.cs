@@ -446,7 +446,7 @@ public partial class MainWindow : Window
             if (sourceChanged)
             {
                 // 源区域变化时更新源
-                var sourceRect = new MagnificationApi.RECT(captureX, captureY, captureX + captureWidth, captureY + captureHeight);
+                var sourceRect = new NativeTypes.RECT(captureX, captureY, captureX + captureWidth, captureY + captureHeight);
                 MagnificationApi.MagSetWindowSource(_hwndMag, sourceRect);
             }
             // 总是重绘以更新光标位置

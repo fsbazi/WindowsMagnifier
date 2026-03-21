@@ -23,17 +23,8 @@ public class AppBarService : IDisposable
         public IntPtr hWnd;
         public uint uCallbackMessage;
         public uint uEdge;
-        public RECT rc;
+        public NativeTypes.RECT rc;
         public int lParam;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
     }
 
     private const uint ABM_NEW = 0x00000000;
@@ -152,7 +143,7 @@ public class AppBarService : IDisposable
             cbSize = Marshal.SizeOf<APPBARDATA>(),
             hWnd = _hwnd,
             uEdge = ABE_TOP,
-            rc = new RECT
+            rc = new NativeTypes.RECT
             {
                 Left = screenLeft,
                 Top = screenTop,

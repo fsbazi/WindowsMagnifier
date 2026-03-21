@@ -195,15 +195,6 @@ public class TrackingManager : IDisposable
     private static extern bool ClientToScreen(IntPtr hWnd, ref NativeTypes.POINT lpPoint);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
     {
         public int cbSize;
@@ -214,7 +205,7 @@ public class TrackingManager : IDisposable
         public IntPtr hwndMenuOwner;
         public IntPtr hwndMoveSize;
         public IntPtr hwndCaret;
-        public RECT rcCaret;
+        public NativeTypes.RECT rcCaret;
     }
 
     #endregion

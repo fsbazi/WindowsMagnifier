@@ -18,7 +18,7 @@ public static class MagnificationApi
     public static extern bool MagUninitialize();
 
     [DllImport(MAG_DLL)]
-    public static extern bool MagSetWindowSource(IntPtr hwnd, RECT rect);
+    internal static extern bool MagSetWindowSource(IntPtr hwnd, NativeTypes.RECT rect);
 
     [DllImport(MAG_DLL)]
     public static extern bool MagSetWindowTransform(IntPtr hwnd, ref MAGTRANSFORM pTransform);
@@ -29,23 +29,6 @@ public static class MagnificationApi
     public const string WC_MAGNIFIER = "Magnifier";
     public const uint MS_SHOWMAGNIFIEDCURSOR = 0x0001;
     public const uint MW_FILTERMODE_EXCLUDE = 0;
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-
-        public RECT(int left, int top, int right, int bottom)
-        {
-            Left = left;
-            Top = top;
-            Right = right;
-            Bottom = bottom;
-        }
-    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MAGTRANSFORM
