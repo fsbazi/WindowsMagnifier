@@ -79,19 +79,21 @@ public class KeyboardHook : IDisposable
         if (nCode >= 0 && (wParam.ToInt32() == WM_KEYDOWN || wParam.ToInt32() == WM_SYSKEYDOWN)
             && lParam != IntPtr.Zero)
         {
+            // 先读取数据，再释放钩子链（最佳实践，保证读取原始数据）
+            var vkCode = Marshal.ReadInt32(lParam);
+            var result = CallNextHookEx(_hookId, nCode, wParam, lParam);
             try
             {
-                var vkCode = Marshal.ReadInt32(lParam);
-                // 过滤修饰键，只响应实际字符输入键
                 if (vkCode < 255 && !IsModifierKey(vkCode))
                 {
                     KeyPressed?.Invoke(vkCode);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 忽略键盘处理错误，避免影响系统
+                System.Diagnostics.Debug.WriteLine($"[KeyboardHook] KeyPressed handler exception: {ex.Message}");
             }
+            return result;
         }
 
         return CallNextHookEx(_hookId, nCode, wParam, lParam);
