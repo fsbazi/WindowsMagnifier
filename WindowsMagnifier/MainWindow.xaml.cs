@@ -450,7 +450,7 @@ public partial class MainWindow : Window
                 MagnificationApi.MagSetWindowSource(_hwndMag, sourceRect);
             }
             // 总是重绘以更新光标位置
-            MagnificationApi.InvalidateRect(_hwndMag, IntPtr.Zero, true);
+            MagnificationApi.InvalidateRect(_hwndMag, IntPtr.Zero, false);
         }
     }
 
