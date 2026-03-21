@@ -10,17 +10,31 @@ namespace WindowsMagnifier.Services;
 /// </summary>
 public class ConfigService
 {
-    private static readonly string ConfigPath = Path.Combine(
+    private static readonly string DefaultConfigPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "WindowsMagnifier",
         "config.json"
     );
 
+    private readonly string _configPath;
     private readonly object _saveLock = new();
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true
     };
+
+    /// <summary>
+    /// 使用默认 AppData 路径
+    /// </summary>
+    public ConfigService() : this(DefaultConfigPath) { }
+
+    /// <summary>
+    /// 使用自定义配置文件路径（用于测试）
+    /// </summary>
+    internal ConfigService(string configPath)
+    {
+        _configPath = configPath;
+    }
 
     /// <summary>
     /// 加载配置，如果不存在则返回默认配置
@@ -30,12 +44,12 @@ public class ConfigService
         AppSettings settings;
         try
         {
-            if (!File.Exists(ConfigPath))
+            if (!File.Exists(_configPath))
             {
                 return AppSettings.CreateDefault();
             }
 
-            var json = File.ReadAllText(ConfigPath);
+            var json = File.ReadAllText(_configPath);
             settings = JsonSerializer.Deserialize<AppSettings>(json) ?? AppSettings.CreateDefault();
         }
         catch (Exception ex)
@@ -58,14 +72,14 @@ public class ConfigService
         {
             try
             {
-                var directory = Path.GetDirectoryName(ConfigPath);
+                var directory = Path.GetDirectoryName(_configPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
 
                 var json = JsonSerializer.Serialize(settings, _jsonOptions);
-                File.WriteAllText(ConfigPath, json);
+                File.WriteAllText(_configPath, json);
             }
             catch (Exception ex)
             {
