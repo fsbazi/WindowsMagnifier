@@ -84,7 +84,7 @@ public class AppSettings
     {
         MagnificationLevel = Math.Clamp(MagnificationLevel, 1, 16);
         WindowHeight = Math.Clamp(WindowHeight, 50, 1200);
-        DisplaySwitchDelay = Math.Clamp(DisplaySwitchDelay, 0, 5000);
+        DisplaySwitchDelay = Math.Clamp(DisplaySwitchDelay, 1, 5000);
 
         if (DisplayMagnificationLevels != null)
         {
