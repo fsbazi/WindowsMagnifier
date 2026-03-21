@@ -210,6 +210,25 @@ public class TrackingManager : IDisposable
     {
         position = new Point();
 
+        // 快速路径：Win32 GetGUIThreadInfo（适用于记事本等传统应用）
+        if (TryGetCaretViaWin32(out position))
+            return true;
+
+        // 回退路径：UI Automation（适用于 Chrome、Edge、VS Code 等现代应用）
+        if (TryGetCaretViaUIAutomation(out position))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// 通过 Win32 GetGUIThreadInfo 获取光标位置。
+    /// 仅对使用系统 Caret（CreateCaret）的传统应用有效，如记事本。
+    /// </summary>
+    private bool TryGetCaretViaWin32(out Point position)
+    {
+        position = new Point();
+
         try
         {
             // 使用 GetGUIThreadInfo 获取光标位置（跨进程，不会阻塞 IME）
@@ -244,6 +263,57 @@ public class TrackingManager : IDisposable
             System.Diagnostics.Debug.WriteLine($"[Tracking] GetGUIThreadInfo error: {ex.Message}");
         }
 
+        return false;
+    }
+
+    /// <summary>
+    /// 通过 UI Automation 获取光标位置。
+    /// 适用于 Chrome、Edge、Firefox、VS Code 等不使用 Win32 Caret 的现代应用。
+    /// 优先使用 TextPattern 获取精确光标位置，失败时回退到焦点元素的边界矩形。
+    /// </summary>
+    private bool TryGetCaretViaUIAutomation(out Point position)
+    {
+        position = new Point();
+        try
+        {
+            var focused = System.Windows.Automation.AutomationElement.FocusedElement;
+            if (focused == null) return false;
+
+            // 方法 A：通过 TextPattern 获取选区/光标的精确位置
+            if (focused.TryGetCurrentPattern(
+                System.Windows.Automation.TextPattern.Pattern, out var patternObj))
+            {
+                var textPattern = (System.Windows.Automation.TextPattern)patternObj;
+                var selections = textPattern.GetSelection();
+                if (selections != null && selections.Length > 0)
+                {
+                    var rects = selections[0].GetBoundingRectangles();
+                    if (rects != null && rects.Length >= 1)
+                    {
+                        // 每个 Rect 包含一行文字的边界矩形
+                        position = new Point(rects[0].X, rects[0].Y);
+                        return true;
+                    }
+                }
+            }
+
+            // 方法 B：使用焦点元素的边界矩形作为近似位置
+            var rect = focused.Current.BoundingRectangle;
+            if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0)
+            {
+                // 使用焦点元素的左侧中间作为近似光标位置
+                position = new Point(rect.Left, rect.Top + rect.Height / 2);
+                return true;
+            }
+        }
+        catch (System.Windows.Automation.ElementNotAvailableException)
+        {
+            // 焦点元素已消失，焦点切换过程中的正常情况
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Tracking] UIAutomation error: {ex.Message}");
+        }
         return false;
     }
 
