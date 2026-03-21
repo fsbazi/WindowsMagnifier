@@ -301,6 +301,10 @@ public class TrackingManager : IDisposable
             var rect = focused.Current.BoundingRectangle;
             if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0)
             {
+                // 面积过大说明返回的是整个控件/面板区域（如 Terminal、Google Docs），
+                // 这种情况下位置不可靠，放弃切换到键盘模式
+                if (rect.Width * rect.Height > 40000) return false;
+
                 // 使用焦点元素的左侧中间作为近似光标位置
                 position = new Point(rect.Left, rect.Top + rect.Height / 2);
                 return true;

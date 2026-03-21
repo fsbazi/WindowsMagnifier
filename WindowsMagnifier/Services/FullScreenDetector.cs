@@ -66,8 +66,13 @@ public class FullScreenDetector : IDisposable
     [DllImport("user32.dll")]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
     private const int GWL_STYLE = -16;
     private const int WS_CAPTION = 0x00C00000;
+    private const int WS_MAXIMIZE = 0x01000000;
+    private const int DWMWA_CLOAKED = 14;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -193,6 +198,8 @@ public class FullScreenDetector : IDisposable
     private DisplayInfo? FindFullScreenDisplay(IntPtr hwnd, List<DisplayInfo> displays)
     {
         if (!IsWindowVisible(hwnd)) return null;
+        // 排除虚拟桌面上被 cloaked 的窗口（在其他桌面上不可见但 IsWindowVisible 仍返回 TRUE）
+        if (IsWindowCloaked(hwnd)) return null;
         if (!GetWindowRect(hwnd, out var rect)) return null;
 
         int width = rect.Right - rect.Left;
@@ -215,6 +222,7 @@ public class FullScreenDetector : IDisposable
     private bool CheckFullScreenForDisplay(IntPtr hwnd, DisplayInfo display)
     {
         if (!IsWindowVisible(hwnd)) return false;
+        if (IsWindowCloaked(hwnd)) return false;
         if (!GetWindowRect(hwnd, out var rect)) return false;
 
         int width = rect.Right - rect.Left;
@@ -248,6 +256,10 @@ public class FullScreenDetector : IDisposable
 
         if (hasCaptionStyle)
         {
+            // 排除最大化窗口（有 WS_CAPTION + WS_MAXIMIZE 的是普通最大化，非全屏）
+            bool isMaximized = (style & WS_MAXIMIZE) != 0;
+            if (isMaximized) return false;
+
             // 有边框的全屏窗口（如 Chrome F11）可能比屏幕稍大（负偏移隐藏边框），
             // 检查窗口是否覆盖了整个屏幕区域
             bool coversScreen = rect.Left <= (int)bounds.Left &&
@@ -261,6 +273,15 @@ public class FullScreenDetector : IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// 检查窗口是否被 cloaked（在其他虚拟桌面上不可见）
+    /// </summary>
+    private static bool IsWindowCloaked(IntPtr hwnd)
+    {
+        var hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out var cloaked, sizeof(int));
+        return hr == 0 && cloaked != 0;
     }
 
     public void Dispose()

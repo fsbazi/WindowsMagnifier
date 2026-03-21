@@ -64,6 +64,12 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out NativeTypes.POINT lpPoint);
 
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    private const int SW_HIDE = 0;
+    private const int SW_SHOWNA = 8; // 显示但不激活
+
     public MainWindow(DisplayInfo display, AppSettings settings, bool showInTaskbar = false)
     {
         InitializeComponent();
@@ -287,11 +293,17 @@ public partial class MainWindow : Window
                 PointerScale.ScaleX = _cachedMagLevel;
                 PointerScale.ScaleY = _cachedMagLevel;
             }
+            // 显示 Magnifier 子窗口（解决 WPF Airspace 问题：InactiveOverlay 无法遮盖 Win32 子窗口）
+            if (_hwndMag != IntPtr.Zero)
+                ShowWindow(_hwndMag, SW_SHOWNA);
             CompositionTarget.Rendering -= OnRendering;
             CompositionTarget.Rendering += OnRendering;
         }
         else
         {
+            // 隐藏 Magnifier 子窗口，让 WPF 的 InactiveOverlay 遮罩生效
+            if (_hwndMag != IntPtr.Zero)
+                ShowWindow(_hwndMag, SW_HIDE);
             InactiveOverlay.Visibility = Visibility.Visible;
             if (_useFallback)
             {
