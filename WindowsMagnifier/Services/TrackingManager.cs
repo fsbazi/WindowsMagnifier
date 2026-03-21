@@ -28,9 +28,9 @@ public class TrackingManager : IDisposable
     private volatile TrackingMode _currentMode = TrackingMode.Mouse;
     private Point _currentPosition;
 
-    // 防抖：键盘光标位置获取
-    private CancellationTokenSource? _caretCts;
-    private const int CaretDebounceMs = 100;
+    // 防抖：键盘光标位置获取（使用版本号替代 CTS 以减少对象分配）
+    private volatile int _debounceVersion;
+    private const int CaretDebounceMs = 30;
     private const int CaretTimeoutMs = 500;
 
     /// <summary>
@@ -108,32 +108,32 @@ public class TrackingManager : IDisposable
     {
         if (!_settings.FollowKeyboardInput) return;
 
-        // 钩子回调中只做最小工作：启动后台 caret 查找
-        // 不立即切换模式或更新位置，避免 caret 获取失败时放大镜闪烁
+        // 钩子回调中只做最小工作：递增版本号并启动后台 caret 查找
+        // 使用 volatile int 版本号替代 CTS 防抖，避免每次按键创建/销毁 CTS 对象
         // 注意：不在钩子线程中调用任何跨进程 API（包括 ImmGetContext），
         // 否则前台窗口忙时会阻塞钩子线程导致全系统输入冻结
-        var newCts = new CancellationTokenSource();
-        var oldCts = Interlocked.Exchange(ref _caretCts, newCts);
-        oldCts?.Cancel();
-        oldCts?.Dispose();
-        var token = newCts.Token;
+        var version = Interlocked.Increment(ref _debounceVersion);
 
-        Task.Run(() => DebouncedCaretLookup(token), token);
+        Task.Run(() => DebouncedCaretLookup(version));
     }
 
     /// <summary>
-    /// 防抖获取光标位置 - 在后台线程中延迟执行，避免阻塞键盘钩子线程
+    /// 防抖获取光标位置 - 在后台线程中延迟执行，避免阻塞键盘钩子线程。
+    /// 使用版本号进行防抖：延迟后检查版本号是否仍匹配，不匹配则说明有更新的按键，放弃本次。
     /// </summary>
-    private async void DebouncedCaretLookup(CancellationToken token)
+    private async void DebouncedCaretLookup(int version)
     {
         try
         {
-            await Task.Delay(CaretDebounceMs, token);
+            await Task.Delay(CaretDebounceMs);
 
-            // IME 合成期间再次检测，防止防抖延迟期间开始合成
-            if (IsImeComposing()) return;
+            // 防抖检查：如果版本号已被更新，说明有更新的按键事件，放弃本次
+            if (_debounceVersion != version) return;
 
-            // 超时保护：避免 TryGetCaretPosition 在异常情况下长时间阻塞
+            // 超时保护：使用临时 CTS 仅用于 WaitAsync 超时控制
+            using var timeoutCts = new CancellationTokenSource(CaretTimeoutMs);
+            var token = timeoutCts.Token;
+
             var caretTask = Task.Run(() =>
             {
                 if (TryGetCaretPosition(out var pos))
@@ -141,21 +141,22 @@ public class TrackingManager : IDisposable
                 return (Success: false, Position: new Point());
             }, token);
 
-            var result = await caretTask.WaitAsync(TimeSpan.FromMilliseconds(CaretTimeoutMs), token);
+            var result = await caretTask.WaitAsync(token);
+
+            // 再次检查版本号：超时等待期间可能有新按键
+            if (_debounceVersion != version) return;
 
             if (result.Success &&
                 !double.IsInfinity(result.Position.X) && !double.IsInfinity(result.Position.Y) &&
                 !double.IsNaN(result.Position.X) && !double.IsNaN(result.Position.Y))
             {
-                if (token.IsCancellationRequested) return;
                 // 只在成功获取 caret 位置后才切换到键盘模式
                 _currentMode = TrackingMode.KeyboardInput;
                 _currentPosition = result.Position;
                 PositionChanged?.Invoke(_currentPosition, TrackingMode.KeyboardInput);
             }
         }
-        catch (OperationCanceledException) { }
-        catch (TimeoutException)
+        catch (OperationCanceledException)
         {
             // 超时：光标获取耗时过长（可能 IME 阻塞），静默跳过
             System.Diagnostics.Debug.WriteLine("[Tracking] TryGetCaretPosition timed out");
@@ -179,17 +180,6 @@ public class TrackingManager : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool ClientToScreen(IntPtr hWnd, ref NativeTypes.POINT lpPoint);
-
-    [DllImport("imm32.dll")]
-    private static extern IntPtr ImmGetContext(IntPtr hWnd);
-
-    [DllImport("imm32.dll")]
-    private static extern bool ImmReleaseContext(IntPtr hWnd, IntPtr hIMC);
-
-    [DllImport("imm32.dll")]
-    private static extern int ImmGetCompositionString(IntPtr hIMC, uint dwIndex, IntPtr lpBuf, uint dwBufLen);
-
-    private const uint GCS_COMPSTR = 0x0008;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
@@ -216,29 +206,6 @@ public class TrackingManager : IDisposable
 
     #endregion
 
-    /// <summary>
-    /// 检测当前前台窗口是否正在进行 IME 合成（输入法组合输入中）
-    /// </summary>
-    private bool IsImeComposing()
-    {
-        var hwnd = GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return false;
-
-        var hIMC = ImmGetContext(hwnd);
-        if (hIMC == IntPtr.Zero) return false;
-
-        try
-        {
-            // 获取合成字符串长度，>0 表示正在合成中
-            int len = ImmGetCompositionString(hIMC, GCS_COMPSTR, IntPtr.Zero, 0);
-            return len > 0;
-        }
-        finally
-        {
-            ImmReleaseContext(hwnd, hIMC);
-        }
-    }
-
     private bool TryGetCaretPosition(out Point position)
     {
         position = new Point();
@@ -250,6 +217,9 @@ public class TrackingManager : IDisposable
             if (hwnd != IntPtr.Zero)
             {
                 var threadId = GetWindowThreadProcessId(hwnd, out _);
+                if (threadId == 0)
+                    return false;
+
                 var guiInfo = new GUITHREADINFO();
                 guiInfo.cbSize = Marshal.SizeOf<GUITHREADINFO>();
 
@@ -279,9 +249,8 @@ public class TrackingManager : IDisposable
 
     public void Dispose()
     {
-        var cts = Interlocked.Exchange(ref _caretCts, null);
-        cts?.Cancel();
-        cts?.Dispose();
+        // 递增版本号使所有进行中的防抖任务自动放弃
+        Interlocked.Increment(ref _debounceVersion);
         _mouseHook.Dispose();
         _keyboardHook.Dispose();
         GC.SuppressFinalize(this);

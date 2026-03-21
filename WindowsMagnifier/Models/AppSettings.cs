@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace WindowsMagnifier.Models;
@@ -48,16 +49,22 @@ public class AppSettings
     public int DisplaySwitchDelay { get; set; } = 100;
 
     /// <summary>
-    /// 获取指定显示器的放大倍数，找不到则返回全局默认值
+    /// 获取指定显示器的放大倍数，找不到则返回全局默认值。
+    /// 返回值始终 Clamp 到 [1, 16]，防止除零或溢出。
     /// </summary>
     public int GetMagnificationLevel(string deviceName)
     {
+        int raw;
         if (DisplayMagnificationLevels != null &&
             DisplayMagnificationLevels.TryGetValue(deviceName, out var level))
         {
-            return level;
+            raw = level;
         }
-        return MagnificationLevel;
+        else
+        {
+            raw = MagnificationLevel;
+        }
+        return Math.Clamp(raw, 1, 16);
     }
 
     /// <summary>
@@ -67,6 +74,26 @@ public class AppSettings
     {
         DisplayMagnificationLevels ??= new Dictionary<string, int>();
         DisplayMagnificationLevels[deviceName] = level;
+    }
+
+    /// <summary>
+    /// 校验并修正所有数值字段到合法范围，防止手动编辑 config.json 导致异常。
+    /// 应在 ConfigService.Load 后立即调用。
+    /// </summary>
+    public void Sanitize()
+    {
+        MagnificationLevel = Math.Clamp(MagnificationLevel, 1, 16);
+        WindowHeight = Math.Clamp(WindowHeight, 50, 1200);
+        DisplaySwitchDelay = Math.Clamp(DisplaySwitchDelay, 0, 5000);
+
+        if (DisplayMagnificationLevels != null)
+        {
+            var keys = new List<string>(DisplayMagnificationLevels.Keys);
+            foreach (var key in keys)
+            {
+                DisplayMagnificationLevels[key] = Math.Clamp(DisplayMagnificationLevels[key], 1, 16);
+            }
+        }
     }
 
     /// <summary>

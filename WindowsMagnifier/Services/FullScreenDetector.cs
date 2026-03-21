@@ -111,70 +111,80 @@ public class FullScreenDetector : IDisposable
 
     private void OnPoll(object? sender, System.Timers.ElapsedEventArgs e)
     {
-        var displays = _displayManager.GetDisplays();
-        var changes = new List<(string displayName, bool isFullScreen)>();
-
-        lock (_lock)
+        try
         {
-            // 1. 检查前台窗口是否是全屏的
-            var fgHwnd = GetForegroundWindow();
-            if (fgHwnd != IntPtr.Zero)
+            var displays = _displayManager.GetDisplays();
+            var changes = new List<(string displayName, bool isFullScreen)>();
+
+            lock (_lock)
             {
-                var fgDisplay = FindFullScreenDisplay(fgHwnd, displays);
-                if (fgDisplay != null && !_fullScreenWindows.ContainsKey(fgDisplay.DeviceName))
+                // 1. 检查前台窗口是否是全屏的
+                var fgHwnd = GetForegroundWindow();
+                if (fgHwnd != IntPtr.Zero)
                 {
-                    // 前台窗口在某个显示器上全屏，加入跟踪
-                    _fullScreenWindows[fgDisplay.DeviceName] = fgHwnd;
-                    changes.Add((fgDisplay.DeviceName, true));
+                    var fgDisplay = FindFullScreenDisplay(fgHwnd, displays);
+                    if (fgDisplay != null && !_fullScreenWindows.ContainsKey(fgDisplay.DeviceName))
+                    {
+                        // 前台窗口在某个显示器上全屏，加入跟踪
+                        _fullScreenWindows[fgDisplay.DeviceName] = fgHwnd;
+                        changes.Add((fgDisplay.DeviceName, true));
+                    }
+                    else if (fgDisplay != null && _fullScreenWindows.ContainsKey(fgDisplay.DeviceName)
+                             && _fullScreenWindows[fgDisplay.DeviceName] != fgHwnd)
+                    {
+                        // 同一显示器上换了一个全屏窗口，更新句柄（不触发事件，仍然是全屏）
+                        _fullScreenWindows[fgDisplay.DeviceName] = fgHwnd;
+                    }
                 }
-                else if (fgDisplay != null && _fullScreenWindows.ContainsKey(fgDisplay.DeviceName)
-                         && _fullScreenWindows[fgDisplay.DeviceName] != fgHwnd)
+
+                // 2. 重新验证已跟踪的全屏窗口是否仍然全屏
+                var keysToRemove = new List<string>();
+                foreach (var kvp in _fullScreenWindows)
                 {
-                    // 同一显示器上换了一个全屏窗口，更新句柄（不触发事件，仍然是全屏）
-                    _fullScreenWindows[fgDisplay.DeviceName] = fgHwnd;
+                    var displayName = kvp.Key;
+                    var hwnd = kvp.Value;
+
+                    // 如果这个窗口刚刚在上面的步骤中被加入或更新过，跳过检查
+                    // （因为已确认它是全屏的）
+                    if (changes.Any(c => c.displayName == displayName && c.isFullScreen))
+                        continue;
+
+                    var display = displays.FirstOrDefault(d => d.DeviceName == displayName);
+                    if (display == null || !CheckFullScreenForDisplay(hwnd, display))
+                    {
+                        keysToRemove.Add(displayName);
+                    }
+                }
+
+                foreach (var key in keysToRemove)
+                {
+                    _fullScreenWindows.Remove(key);
+                    changes.Add((key, false));
                 }
             }
 
-            // 2. 重新验证已跟踪的全屏窗口是否仍然全屏
-            var keysToRemove = new List<string>();
-            foreach (var kvp in _fullScreenWindows)
+            // 3. 触发变化事件
+            if (changes.Count > 0)
             {
-                var displayName = kvp.Key;
-                var hwnd = kvp.Value;
-
-                // 如果这个窗口刚刚在上面的步骤中被加入或更新过，跳过检查
-                // （因为已确认它是全屏的）
-                if (changes.Any(c => c.displayName == displayName && c.isFullScreen))
-                    continue;
-
-                var display = displays.FirstOrDefault(d => d.DeviceName == displayName);
-                if (display == null || !CheckFullScreenForDisplay(hwnd, display))
+                Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
-                    keysToRemove.Add(displayName);
-                }
-            }
-
-            foreach (var key in keysToRemove)
-            {
-                _fullScreenWindows.Remove(key);
-                changes.Add((key, false));
+                    foreach (var (displayName, isFullScreen) in changes)
+                    {
+                        DisplayFullScreenStateChanged?.Invoke(displayName, isFullScreen);
+                    }
+                });
             }
         }
-
-        // 3. 触发变化事件
-        if (changes.Count > 0)
+        catch (Exception ex)
         {
-            Application.Current?.Dispatcher.BeginInvoke(() =>
-            {
-                foreach (var (displayName, isFullScreen) in changes)
-                {
-                    DisplayFullScreenStateChanged?.Invoke(displayName, isFullScreen);
-                }
-            });
+            System.Diagnostics.Debug.WriteLine($"[FullScreenDetector] OnPoll exception: {ex.Message}");
         }
-
-        // 手动重启（AutoReset = false，防止重入）
-        _pollTimer?.Start();
+        finally
+        {
+            // 无论是否异常，始终重启 timer（AutoReset=false 防重入）
+            // 确保全屏检测不会因异常而永久停止
+            _pollTimer?.Start();
+        }
     }
 
     /// <summary>
@@ -214,27 +224,40 @@ public class FullScreenDetector : IDisposable
     }
 
     /// <summary>
-    /// 检查窗口的尺寸和位置是否匹配指定显示器（全屏无边框）
+    /// 检查窗口的尺寸和位置是否匹配指定显示器（全屏检测）。
+    /// 无边框窗口精确匹配屏幕尺寸即判定为全屏；
+    /// 有边框窗口（如 Chrome F11、VLC）允许窗口覆盖或超出屏幕边界也判定为全屏。
     /// </summary>
     private bool CheckWindowMatchesDisplay(RECT rect, int width, int height, IntPtr hwnd, DisplayInfo display)
     {
         var bounds = display.Bounds;
+        var style = GetWindowLong(hwnd, GWL_STYLE);
+        bool hasCaptionStyle = (style & WS_CAPTION) != 0;
 
-        // 窗口尺寸匹配屏幕（允许 2px 误差）
-        bool sizeMatches = Math.Abs(width - bounds.Width) <= 2 &&
-                           Math.Abs(height - bounds.Height) <= 2;
+        // 严格匹配：窗口尺寸和位置精确覆盖屏幕（允许 2px 误差）
+        bool sizeMatchesExact = Math.Abs(width - bounds.Width) <= 2 &&
+                                Math.Abs(height - bounds.Height) <= 2;
+        bool positionMatchesExact = Math.Abs(rect.Left - bounds.Left) <= 2 &&
+                                     Math.Abs(rect.Top - bounds.Top) <= 2;
 
-        // 窗口位置在屏幕原点（允许 2px 误差）
-        bool positionMatches = Math.Abs(rect.Left - bounds.Left) <= 2 &&
-                                Math.Abs(rect.Top - bounds.Top) <= 2;
-
-        if (sizeMatches && positionMatches)
+        if (sizeMatchesExact && positionMatchesExact)
         {
-            // 检查是否无边框（游戏/视频播放器特征）
-            var style = GetWindowLong(hwnd, GWL_STYLE);
-            bool isBorderless = (style & WS_CAPTION) == 0;
+            // 尺寸位置精确匹配，无论有无边框都判定为全屏
+            return true;
+        }
 
-            return isBorderless;
+        if (hasCaptionStyle)
+        {
+            // 有边框的全屏窗口（如 Chrome F11）可能比屏幕稍大（负偏移隐藏边框），
+            // 检查窗口是否覆盖了整个屏幕区域
+            bool coversScreen = rect.Left <= (int)bounds.Left &&
+                                rect.Top <= (int)bounds.Top &&
+                                rect.Right >= (int)bounds.Right &&
+                                rect.Bottom >= (int)bounds.Bottom;
+            // 但窗口不应比屏幕大太多（超过 20px 说明不是全屏，排除普通最大化窗口）
+            bool notTooLarge = width <= bounds.Width + 20 &&
+                               height <= bounds.Height + 20;
+            return coversScreen && notTooLarge;
         }
 
         return false;

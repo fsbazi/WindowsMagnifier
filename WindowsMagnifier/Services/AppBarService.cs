@@ -135,16 +135,9 @@ public class AppBarService : IDisposable
         Log($"DirectPosition: X={screenLeft}, Y={screenTop}, W={screenRight - screenLeft}, H={height}");
     }
 
-    private void Log(string message)
+    private static void Log(string message)
     {
-        try
-        {
-            var logPath = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "WindowsMagnifier", "debug.log");
-            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss.fff}] [AppBar] {message}\n");
-        }
-        catch { }
+        LogService.Instance.LogDebug("AppBar", message);
     }
 
     private void SetPosition(int height, int screenLeft, int screenTop, int screenRight)

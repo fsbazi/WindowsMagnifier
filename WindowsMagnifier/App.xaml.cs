@@ -20,7 +20,7 @@ public partial class App : System.Windows.Application
     private const int MOD_NOREPEAT = 0x4000;
     private const int WM_HOTKEY = 0x0312;
     private const int VK_M = 0x4D;
-    private const long MaxLogSize = 1024 * 1024; // 1MB
+    private static readonly LogService _log = LogService.Instance;
 
     [DllImport("user32.dll")]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
@@ -40,7 +40,7 @@ public partial class App : System.Windows.Application
     /// 因全屏而被隐藏的显示器设备名集合（与用户手动隐藏区分）
     /// </summary>
     private readonly HashSet<string> _fullScreenHiddenDisplays = new();
-    private string _logPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WindowsMagnifier", "error.log");
+    private readonly string _logPath = LogService.Instance.ErrorLogPath;
     private bool _magInitialized;
     private bool _windowsVisible = true;
     private volatile bool _wasKeyboardMode;
@@ -65,29 +65,29 @@ public partial class App : System.Windows.Application
 
         try
         {
-            LogMessage("Application starting...");
+            _log.LogError("Application starting...");
 
             // 初始化配置
             _configService = new ConfigService();
             _settings = _configService.Load();
-            LogMessage("Config loaded");
+            _log.LogError("Config loaded");
 
             // 初始化显示器管理
             _displayManager = new DisplayManager();
             _displayManager.DisplaysChanged += OnDisplaysChanged;
-            LogMessage($"DisplayManager created, displays: {_displayManager.GetDisplays().Count}");
+            _log.LogError($"DisplayManager created, displays: {_displayManager.GetDisplays().Count}");
 
             // 初始化焦点管理
             _displayFocusManager = new DisplayFocusManager(_displayManager, _settings.DisplaySwitchDelay);
             _displayFocusManager.ActiveDisplayChanged += OnActiveDisplayChanged;
             _displayFocusManager.Initialize();
-            LogMessage("DisplayFocusManager initialized");
+            _log.LogError("DisplayFocusManager initialized");
 
             // 初始化跟踪管理
             _trackingManager = new TrackingManager(_settings);
             _trackingManager.PositionChanged += OnPositionChanged;
             _trackingManager.Start();
-            LogMessage("TrackingManager started");
+            _log.LogError("TrackingManager started");
 
             // 初始化全屏检测（如果启用）
             if (_settings.HideOnFullScreen)
@@ -95,29 +95,29 @@ public partial class App : System.Windows.Application
                 _fullScreenDetector = new FullScreenDetector(_displayManager);
                 _fullScreenDetector.DisplayFullScreenStateChanged += OnDisplayFullScreenStateChanged;
                 _fullScreenDetector.Start();
-                LogMessage("FullScreenDetector started");
+                _log.LogError("FullScreenDetector started");
             }
 
             // 初始化 Magnification API（应用级别，所有窗口共享）
             _magInitialized = MagnificationApi.MagInitialize();
             if (!_magInitialized)
             {
-                LogMessage($"MagInitialize failed, error: {Marshal.GetLastWin32Error()}");
+                _log.LogError($"MagInitialize failed, error: {Marshal.GetLastWin32Error()}");
             }
             else
             {
-                LogMessage("MagInitialize succeeded");
+                _log.LogError("MagInitialize succeeded");
             }
 
             // 创建放大镜窗口
             CreateMagnifierWindows();
-            LogMessage("Magnifier windows created");
+            _log.LogError("Magnifier windows created");
 
             // 显示窗口（如果不是最小化启动）
             if (!_settings.StartMinimized)
             {
                 ShowAllWindows();
-                LogMessage("Windows shown");
+                _log.LogError("Windows shown");
             }
             else
             {
@@ -132,7 +132,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception ex)
         {
-            LogMessage($"Startup error: {ex}");
+            _log.LogError($"Startup error: {ex}");
             System.Windows.MessageBox.Show($"启动错误: {ex.Message}\n\n详细信息请查看: {_logPath}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
@@ -156,16 +156,16 @@ public partial class App : System.Windows.Application
 
             if (!RegisterHotKey(_hotkeySource.Handle, HOTKEY_ID, MOD_WIN | MOD_ALT | MOD_NOREPEAT, VK_M))
             {
-                LogMessage($"RegisterHotKey failed, error: {Marshal.GetLastWin32Error()}");
+                _log.LogError($"RegisterHotKey failed, error: {Marshal.GetLastWin32Error()}");
             }
             else
             {
-                LogMessage("Global hotkey Win+Alt+M registered");
+                _log.LogError("Global hotkey Win+Alt+M registered");
             }
         }
         catch (Exception ex)
         {
-            LogMessage($"RegisterGlobalHotkey exception: {ex.Message}");
+            _log.LogError($"RegisterGlobalHotkey exception: {ex.Message}");
         }
     }
 
@@ -237,57 +237,24 @@ public partial class App : System.Windows.Application
 
     #endregion
 
-    #region 日志
-
-    private void LogMessage(string message)
-    {
-        try
-        {
-            var dir = Path.GetDirectoryName(_logPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            // 日志文件超过 1MB 时截断保留后半部分
-            TruncateLogIfNeeded(_logPath);
-
-            File.AppendAllText(_logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n");
-        }
-        catch { }
-    }
-
-    private static void TruncateLogIfNeeded(string logPath)
-    {
-        try
-        {
-            if (!File.Exists(logPath)) return;
-            var info = new FileInfo(logPath);
-            if (info.Length <= MaxLogSize) return;
-
-            var lines = File.ReadAllLines(logPath);
-            var keepFrom = lines.Length / 2;
-            File.WriteAllLines(logPath, lines[keepFrom..]);
-        }
-        catch { }
-    }
-
-    #endregion
+    // 日志通过 LogService.Instance 统一管理
 
     private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         var ex = e.ExceptionObject as Exception;
-        LogMessage($"UnhandledException: {ex}");
+        _log.LogError($"UnhandledException: {ex}");
         System.Windows.MessageBox.Show($"未处理的异常: {ex?.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void OnThreadException(object sender, System.Threading.ThreadExceptionEventArgs e)
     {
-        LogMessage($"ThreadException: {e.Exception}");
+        _log.LogError($"ThreadException: {e.Exception}");
         System.Windows.MessageBox.Show($"线程异常: {e.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
-        LogMessage($"DispatcherUnhandledException: {e.Exception}");
+        _log.LogError($"DispatcherUnhandledException: {e.Exception}");
         System.Windows.MessageBox.Show($"调度器异常: {e.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
     }
@@ -465,13 +432,19 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>
+    /// 由活动的 MainWindow 在 OnRendering 中调用，将显示器焦点更新从钩子线程移到渲染循环（UI 线程）
+    /// </summary>
+    public void UpdateDisplayFocusFromRendering(System.Windows.Point position)
+    {
+        _displayFocusManager?.UpdateFromMousePosition(position);
+    }
+
     private void OnPositionChanged(System.Windows.Point position, TrackingMode mode)
     {
-        // 只在鼠标模式下更新显示器焦点
+        // 鼠标模式下：钩子回调仅处理模式切换，显示器焦点更新已移至 OnRendering 渲染循环
         if (mode == TrackingMode.Mouse)
         {
-            _displayFocusManager?.UpdateFromMousePosition(position);
-
             // 只在从键盘模式切换回鼠标模式时清除键盘跟踪标记（避免每次鼠标移动都调度）
             if (_wasKeyboardMode)
             {
@@ -491,11 +464,16 @@ public partial class App : System.Windows.Application
         _wasKeyboardMode = true;
         Current.Dispatcher.BeginInvoke(() =>
         {
-            var activeDeviceName = _displayFocusManager?.ActiveDisplay?.DeviceName;
+            // 根据 caret 位置确定所在显示器，而不是用鼠标所在显示器
+            var caretDisplay = _displayManager?.GetDisplayFromPoint(position);
+            var targetDeviceName = caretDisplay?.DeviceName ?? _displayFocusManager?.ActiveDisplay?.DeviceName;
+
             foreach (var window in _magnifierWindows)
             {
-                if (window.Display.DeviceName == activeDeviceName)
+                if (window.Display.DeviceName == targetDeviceName)
+                {
                     window.SetPosition(position);
+                }
             }
         });
     }

@@ -56,14 +56,22 @@ public class MouseHook : IDisposable
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEMOVE)
+        if (nCode >= 0 && wParam.ToInt32() == WM_MOUSEMOVE && lParam != IntPtr.Zero)
         {
             // 直接从内存读取 X/Y（MSLLHOOKSTRUCT 的前两个字段），避免堆分配
             int x = Marshal.ReadInt32(lParam);
             int y = Marshal.ReadInt32(lParam, 4);
             // 先调用 CallNextHookEx 释放钩子链，再触发事件
             var result = CallNextHookEx(_hookId, nCode, wParam, lParam);
-            MouseMoved?.Invoke(x, y);
+            try
+            {
+                MouseMoved?.Invoke(x, y);
+            }
+            catch (Exception ex)
+            {
+                // 钩子回调中绝不能让异常逃逸，否则 Windows 会静默移除钩子
+                System.Diagnostics.Debug.WriteLine($"[MouseHook] MouseMoved handler exception: {ex.Message}");
+            }
             return result;
         }
 

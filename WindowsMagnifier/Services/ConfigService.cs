@@ -27,6 +27,7 @@ public class ConfigService
     /// </summary>
     public AppSettings Load()
     {
+        AppSettings settings;
         try
         {
             if (!File.Exists(ConfigPath))
@@ -35,13 +36,17 @@ public class ConfigService
             }
 
             var json = File.ReadAllText(ConfigPath);
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? AppSettings.CreateDefault();
+            settings = JsonSerializer.Deserialize<AppSettings>(json) ?? AppSettings.CreateDefault();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[Config] Load error: {ex.Message}");
-            return AppSettings.CreateDefault();
+            settings = AppSettings.CreateDefault();
         }
+
+        // 校验所有数值字段，防止手动编辑 config.json 导致非法值
+        settings.Sanitize();
+        return settings;
     }
 
     /// <summary>

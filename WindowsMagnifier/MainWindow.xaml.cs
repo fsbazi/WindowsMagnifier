@@ -30,8 +30,11 @@ public partial class MainWindow : Window
     private volatile bool _isKeyboardTracking;
     private int _lastCaptureX = int.MinValue;
     private int _lastCaptureY = int.MinValue;
+    private int _lastCursorX = int.MinValue;
+    private int _lastCursorY = int.MinValue;
     private long _lastRenderTick;
     private const long ForceRefreshIntervalTicks = 500 * TimeSpan.TicksPerMillisecond; // 500ms
+    private int _cachedMagLevel; // 缓存放大倍数，避免每帧字典查找
 
     // Magnification API
     private IntPtr _hwndMag;
@@ -67,6 +70,7 @@ public partial class MainWindow : Window
 
         _display = display;
         _settings = settings;
+        _cachedMagLevel = settings.GetMagnificationLevel(display.DeviceName);
         _appBarService = new AppBarService();
         _showInTaskbar = showInTaskbar;
 
@@ -272,6 +276,7 @@ public partial class MainWindow : Window
 
         if (active)
         {
+            _cachedMagLevel = _settings.GetMagnificationLevel(_display.DeviceName);
             InactiveOverlay.Visibility = Visibility.Collapsed;
             _lastCaptureX = int.MinValue;
             _lastCaptureY = int.MinValue;
@@ -279,8 +284,8 @@ public partial class MainWindow : Window
             {
                 MagnifiedImage.Visibility = Visibility.Visible;
                 PointerCanvas.Visibility = Visibility.Visible;
-                PointerScale.ScaleX = _settings.GetMagnificationLevel(_display.DeviceName);
-                PointerScale.ScaleY = _settings.GetMagnificationLevel(_display.DeviceName);
+                PointerScale.ScaleX = _cachedMagLevel;
+                PointerScale.ScaleY = _cachedMagLevel;
             }
             CompositionTarget.Rendering -= OnRendering;
             CompositionTarget.Rendering += OnRendering;
@@ -319,32 +324,9 @@ public partial class MainWindow : Window
         _isKeyboardTracking = false;
     }
 
-    private static readonly string DebugLogPath = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "WindowsMagnifier", "debug.log");
-
-    private void Log(string message)
+    private static void Log(string message)
     {
-        try
-        {
-            var dir = System.IO.Path.GetDirectoryName(DebugLogPath);
-            if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
-                System.IO.Directory.CreateDirectory(dir);
-
-            // 日志超过 1MB 时截断
-            if (System.IO.File.Exists(DebugLogPath))
-            {
-                var info = new System.IO.FileInfo(DebugLogPath);
-                if (info.Length > 1024 * 1024)
-                {
-                    var lines = System.IO.File.ReadAllLines(DebugLogPath);
-                    System.IO.File.WriteAllLines(DebugLogPath, lines[(lines.Length / 2)..]);
-                }
-            }
-
-            System.IO.File.AppendAllText(DebugLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {message}\n");
-        }
-        catch { }
+        LogService.Instance.LogDebug(message);
     }
 
     /// <summary>
@@ -362,6 +344,9 @@ public partial class MainWindow : Window
             {
                 _lastPosition = new Point(pt.X, pt.Y);
                 _hasPosition = true;
+
+                // 将显示器焦点更新从钩子线程移到渲染循环中执行
+                (System.Windows.Application.Current as App)?.UpdateDisplayFocusFromRendering(_lastPosition);
             }
         }
 
@@ -372,9 +357,9 @@ public partial class MainWindow : Window
         // 计算捕获区域（物理像素）
         var physicalWidth = Width * _dpiScaleX;
         var physicalHeight = Height * _dpiScaleY;
-        var magLevel = _settings.GetMagnificationLevel(_display.DeviceName);
-        var captureWidth = (int)(physicalWidth / magLevel);
-        var captureHeight = (int)(physicalHeight / magLevel);
+        var magLevel = _cachedMagLevel;
+        var captureWidth = Math.Max(1, (int)(physicalWidth / magLevel));
+        var captureHeight = Math.Max(1, (int)(physicalHeight / magLevel));
 
         var captureX = (int)(focusPoint.X - captureWidth / 2.0);
         var captureY = (int)(focusPoint.Y - captureHeight / 2.0);
@@ -386,18 +371,38 @@ public partial class MainWindow : Window
         var screenBottom = (int)bounds.Bottom;
         var screenLeft = (int)bounds.Left;
 
+        // 限制捕获尺寸不超过可用屏幕区域，防止溢出导致坐标计算异常
+        var availableWidth = screenRight - screenLeft;
+        var availableHeight = screenBottom - effectiveTop;
+        if (availableWidth < 1) availableWidth = 1;
+        if (availableHeight < 1) availableHeight = 1;
+        captureWidth = Math.Min(captureWidth, availableWidth);
+        captureHeight = Math.Min(captureHeight, availableHeight);
+
         captureX = Math.Max(screenLeft, Math.Min(screenRight - captureWidth, captureX));
         captureY = Math.Max(effectiveTop, Math.Min(screenBottom - captureHeight, captureY));
 
-        // 位置未变化时，检查是否超过强制刷新间隔（支持动态内容如视频/滚动）
+        // 检查源区域和光标位置变化
+        var currentCursorX = (int)focusPoint.X;
+        var currentCursorY = (int)focusPoint.Y;
+        var sourceChanged = (captureX != _lastCaptureX || captureY != _lastCaptureY);
+        var cursorMoved = (currentCursorX != _lastCursorX || currentCursorY != _lastCursorY);
+
         var now = DateTime.UtcNow.Ticks;
-        if (captureX == _lastCaptureX && captureY == _lastCaptureY)
+        if (!sourceChanged && !cursorMoved)
         {
+            // 源区域和光标都未变化，检查强制刷新间隔（支持动态内容如视频/滚动）
             if (now - _lastRenderTick < ForceRefreshIntervalTicks)
                 return;
         }
-        _lastCaptureX = captureX;
-        _lastCaptureY = captureY;
+
+        if (sourceChanged)
+        {
+            _lastCaptureX = captureX;
+            _lastCaptureY = captureY;
+        }
+        _lastCursorX = currentCursorX;
+        _lastCursorY = currentCursorY;
         _lastRenderTick = now;
 
         if (_useFallback)
@@ -424,9 +429,13 @@ public partial class MainWindow : Window
         }
         else if (_hwndMag != IntPtr.Zero)
         {
-            // Magnification API 模式
-            var sourceRect = new MagnificationApi.RECT(captureX, captureY, captureX + captureWidth, captureY + captureHeight);
-            MagnificationApi.MagSetWindowSource(_hwndMag, sourceRect);
+            if (sourceChanged)
+            {
+                // 源区域变化时更新源
+                var sourceRect = new MagnificationApi.RECT(captureX, captureY, captureX + captureWidth, captureY + captureHeight);
+                MagnificationApi.MagSetWindowSource(_hwndMag, sourceRect);
+            }
+            // 总是重绘以更新光标位置
             MagnificationApi.InvalidateRect(_hwndMag, IntPtr.Zero, true);
         }
     }
@@ -475,6 +484,9 @@ public partial class MainWindow : Window
 
     public void UpdateSettings(AppSettings settings)
     {
+        // 刷新缓存的放大倍数
+        _cachedMagLevel = settings.GetMagnificationLevel(_display.DeviceName);
+
         // 只更新 WPF 尺寸，位置交给 AppBarService
         UpdateWindowSize();
         _appBarService.UpdateHeight(settings.WindowHeight);
@@ -487,7 +499,7 @@ public partial class MainWindow : Window
             var magHeight = physicalHeight - borderHeight;
             MagnificationApi.SetWindowPos(_hwndMag, IntPtr.Zero, 0, 0, physicalWidth, magHeight, 0);
 
-            var transform = MagnificationApi.MAGTRANSFORM.CreateIdentity(settings.GetMagnificationLevel(_display.DeviceName));
+            var transform = MagnificationApi.MAGTRANSFORM.CreateIdentity(_cachedMagLevel);
             MagnificationApi.MagSetWindowTransform(_hwndMag, ref transform);
         }
     }

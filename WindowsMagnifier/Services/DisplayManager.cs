@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
 using WindowsMagnifier.Models;
@@ -13,6 +14,14 @@ namespace WindowsMagnifier.Services;
 public class DisplayManager : IDisposable
 {
     private List<DisplayInfo>? _cachedDisplays;
+
+    /// <summary>
+    /// 防抖延迟（毫秒）：DisplaySettingsChanged 可能短时间内连续触发多次，
+    /// 使用防抖确保只在最后一次变化后执行一次重建。
+    /// </summary>
+    private const int DebounceDelayMs = 500;
+    private System.Threading.Timer? _debounceTimer;
+    private readonly object _debounceLock = new();
 
     /// <summary>
     /// 获取所有显示器信息（带缓存，显示器变化时自动刷新）
@@ -71,12 +80,36 @@ public class DisplayManager : IDisposable
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         _cachedDisplays = null; // 清除缓存，下次获取时重新读取
+
+        // 防抖：每次触发都重置计时器，只有最后一次触发后 500ms 才真正执行
+        lock (_debounceLock)
+        {
+            _debounceTimer?.Dispose();
+            _debounceTimer = new System.Threading.Timer(OnDebounceElapsed, null, DebounceDelayMs, Timeout.Infinite);
+        }
+    }
+
+    private void OnDebounceElapsed(object? state)
+    {
+        lock (_debounceLock)
+        {
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+        }
+
         DisplaysChanged?.Invoke();
     }
 
     public void Dispose()
     {
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+
+        lock (_debounceLock)
+        {
+            _debounceTimer?.Dispose();
+            _debounceTimer = null;
+        }
+
         GC.SuppressFinalize(this);
     }
 }
