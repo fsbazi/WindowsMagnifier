@@ -25,7 +25,7 @@ public class HotkeyService : IDisposable
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private HwndSource? _hotkeySource;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// 快捷键触发时引发的事件
@@ -65,7 +65,7 @@ public class HotkeyService : IDisposable
 
     private IntPtr HotkeyWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+        if (msg == WM_HOTKEY && (int)(wParam.ToInt64() & 0xFFFF) == HOTKEY_ID)
         {
             HotkeyTriggered?.Invoke();
             handled = true;
@@ -84,5 +84,7 @@ public class HotkeyService : IDisposable
             _hotkeySource.Dispose();
             _hotkeySource = null;
         }
+
+        GC.SuppressFinalize(this);
     }
 }

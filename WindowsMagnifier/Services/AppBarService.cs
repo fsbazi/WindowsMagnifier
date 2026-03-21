@@ -188,7 +188,7 @@ public class AppBarService : IDisposable
         // 防重入：避免多个 AppBar 之间互相触发位置更新导致死循环
         if (_isUpdatingPosition) return;
 
-        var notification = (uint)wParam.ToInt32();
+        var notification = (uint)(wParam.ToInt64() & 0xFFFFFFFF);
         switch (notification)
         {
             case ABN_POSCHANGED:
