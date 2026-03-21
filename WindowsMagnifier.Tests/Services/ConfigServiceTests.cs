@@ -76,4 +76,17 @@ public class ConfigServiceTests : IDisposable
         Assert.Equal(7, settings.MagnificationLevel);
         Assert.Equal(300, settings.WindowHeight);
     }
+
+    [Fact]
+    public void SaveAndLoad_WithDisplayMagnificationLevels_PreservesValues()
+    {
+        var original = new AppSettings();
+        original.SetMagnificationLevel(@"\\.\DISPLAY1", 5);
+        original.SetMagnificationLevel(@"\\.\DISPLAY2", 10);
+        _service.Save(original);
+
+        var loaded = _service.Load();
+        Assert.Equal(5, loaded.GetMagnificationLevel(@"\\.\DISPLAY1"));
+        Assert.Equal(10, loaded.GetMagnificationLevel(@"\\.\DISPLAY2"));
+    }
 }
