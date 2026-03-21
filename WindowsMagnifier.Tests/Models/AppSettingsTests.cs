@@ -103,5 +103,46 @@ public class AppSettingsTests
         Assert.False(settings.StartMinimized);
         Assert.True(settings.HideOnFullScreen);
         Assert.Equal(100, settings.DisplaySwitchDelay);
+        Assert.Equal("Win+Alt+M", settings.ToggleAllHotkey);
+        Assert.Equal("Win+Alt+N", settings.ToggleCurrentHotkey);
+    }
+
+    [Fact]
+    public void Sanitize_ValidHotkeys_Unchanged()
+    {
+        var settings = new AppSettings
+        {
+            ToggleAllHotkey = "Ctrl+Shift+A",
+            ToggleCurrentHotkey = "Win+Alt+N"
+        };
+        settings.Sanitize();
+        Assert.Equal("Ctrl+Shift+A", settings.ToggleAllHotkey);
+        Assert.Equal("Win+Alt+N", settings.ToggleCurrentHotkey);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("InvalidKey")]
+    [InlineData("M")]
+    public void Sanitize_InvalidToggleAllHotkey_ResetsToDefault(string? invalidHotkey)
+    {
+        var settings = new AppSettings { ToggleAllHotkey = invalidHotkey! };
+        settings.Sanitize();
+        Assert.Equal("Win+Alt+M", settings.ToggleAllHotkey);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("InvalidKey")]
+    [InlineData("N")]
+    public void Sanitize_InvalidToggleCurrentHotkey_ResetsToDefault(string? invalidHotkey)
+    {
+        var settings = new AppSettings { ToggleCurrentHotkey = invalidHotkey! };
+        settings.Sanitize();
+        Assert.Equal("Win+Alt+N", settings.ToggleCurrentHotkey);
     }
 }

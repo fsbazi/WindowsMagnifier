@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace WindowsMagnifier.Services;
@@ -19,6 +20,8 @@ public sealed class LogService
     private readonly string _errorLogPath;
     private readonly string _debugLogPath;
     private readonly object _writeLock = new();
+    private bool _directoryEnsured;
+    private readonly Dictionary<string, bool> _symLinkCheckCache = new();
 
     private LogService()
     {
@@ -94,35 +97,48 @@ public sealed class LogService
 
     private void EnsureDirectory()
     {
+        if (_directoryEnsured) return;
         if (!Directory.Exists(_logDir))
             Directory.CreateDirectory(_logDir);
+        _directoryEnsured = true;
     }
 
     /// <summary>
-    /// 检查路径是否为符号链接/重解析点
+    /// 检查路径是否为符号链接/重解析点（结果缓存，每条路径只检查一次）
     /// </summary>
-    private static bool IsSymbolicLink(string path)
+    private bool IsSymbolicLink(string path)
     {
+        if (_symLinkCheckCache.TryGetValue(path, out var cached))
+            return cached;
+
+        bool result;
         try
         {
             if (!File.Exists(path))
-                return false;
-
-            var attrs = File.GetAttributes(path);
-            return (attrs & FileAttributes.ReparsePoint) != 0;
+            {
+                result = false;
+            }
+            else
+            {
+                var attrs = File.GetAttributes(path);
+                result = (attrs & FileAttributes.ReparsePoint) != 0;
+            }
         }
         catch
         {
             // 无法检查属性时保守拒绝
-            return true;
+            result = true;
         }
+
+        _symLinkCheckCache[path] = result;
+        return result;
     }
 
     /// <summary>
     /// 文件轮转：超过阈值时将当前文件重命名为 .bak，创建空的新文件。
     /// 避免 File.ReadAllLines 将整个大文件读入内存的 OOM 风险。
     /// </summary>
-    private static void RotateIfNeeded(string logPath)
+    private void RotateIfNeeded(string logPath)
     {
         try
         {
@@ -141,6 +157,9 @@ public sealed class LogService
 
             // 当前日志重命名为 .bak
             File.Move(logPath, bakPath);
+
+            // 轮转后清除符号链接缓存（新文件需重新检查）
+            _symLinkCheckCache.Remove(logPath);
 
             // 新日志文件会由后续的 FileStream Append 自动创建
         }

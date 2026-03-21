@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -18,16 +19,33 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly ConfigService _configService;
+    private readonly HotkeyService _hotkeyService;
     private readonly List<DisplayInfo> _displays;
     private bool _isLoading = true;
     private readonly DispatcherTimer _saveDebounce;
 
-    public SettingsWindow(AppSettings settings, ConfigService configService, List<DisplayInfo> displays)
+    /// <summary>
+    /// 当前正在录制快捷键的目标: null=不录制, "ToggleAll", "ToggleCurrent"
+    /// </summary>
+    private string? _recordingTarget;
+
+    /// <summary>
+    /// 录制状态下的渐变边框画刷（橙红色脉冲）
+    /// </summary>
+    private static readonly Brush RecordingBorderBrush = new LinearGradientBrush(
+        System.Windows.Media.Color.FromRgb(0xFF, 0x6B, 0x35),
+        System.Windows.Media.Color.FromRgb(0xE8, 0x31, 0x3A), 0);
+
+    private static readonly Brush NormalBorderBrush = new SolidColorBrush(
+        System.Windows.Media.Color.FromArgb(0x25, 0xFF, 0xFF, 0xFF));
+
+    public SettingsWindow(AppSettings settings, ConfigService configService, List<DisplayInfo> displays, HotkeyService hotkeyService)
     {
         InitializeComponent();
 
         _settings = settings;
         _configService = configService;
+        _hotkeyService = hotkeyService;
         _displays = displays;
 
         // 无论如何关闭窗口都应通知调用方刷新（因为设置已即时保存）
@@ -39,10 +57,10 @@ public partial class SettingsWindow : Window
                 DialogResult = true;
         };
 
-        // Escape 键关闭窗口
+        // Escape 键关闭窗口（不在快捷键录制状态时）
         KeyDown += (_, args) =>
         {
-            if (args.Key == System.Windows.Input.Key.Escape)
+            if (args.Key == System.Windows.Input.Key.Escape && _recordingTarget == null)
             {
                 DialogResult = true;
                 Close();
@@ -158,6 +176,10 @@ public partial class SettingsWindow : Window
 
         // 手动更新标签文本
         HeightValue.Text = _settings.WindowHeight.ToString();
+
+        // 快捷键
+        ToggleAllHotkeyText.Text = _settings.ToggleAllHotkey;
+        ToggleCurrentHotkeyText.Text = _settings.ToggleCurrentHotkey;
     }
 
     /// <summary>
@@ -216,6 +238,179 @@ public partial class SettingsWindow : Window
         _settings.HideOnFullScreen = HideOnFullScreenCheckBox.IsChecked ?? true;
         SaveNow();
     }
+
+    #region 快捷键录制
+
+    private void ToggleAllHotkeyBox_Click(object sender, MouseButtonEventArgs e)
+    {
+        StartRecording("ToggleAll");
+        e.Handled = true;
+    }
+
+    private void ToggleCurrentHotkeyBox_Click(object sender, MouseButtonEventArgs e)
+    {
+        StartRecording("ToggleCurrent");
+        e.Handled = true;
+    }
+
+    private void StartRecording(string target)
+    {
+        // 如果已在录制另一个，先停止
+        StopRecording();
+
+        _recordingTarget = target;
+
+        if (target == "ToggleAll")
+        {
+            ToggleAllHotkeyText.Text = "按下快捷键...";
+            ToggleAllHotkeyBox.BorderBrush = RecordingBorderBrush;
+            ToggleAllHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x20, 0xFF, 0x6B, 0x35));
+        }
+        else
+        {
+            ToggleCurrentHotkeyText.Text = "按下快捷键...";
+            ToggleCurrentHotkeyBox.BorderBrush = RecordingBorderBrush;
+            ToggleCurrentHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x20, 0xFF, 0x6B, 0x35));
+        }
+
+        // 订阅键盘事件（使用 PreviewKeyDown 以捕获系统键如 Alt）
+        PreviewKeyDown += OnHotkeyRecordKeyDown;
+
+        // 点击窗口其他区域取消录制
+        PreviewMouseDown += OnRecordingMouseDown;
+    }
+
+    private void StopRecording()
+    {
+        if (_recordingTarget == null) return;
+
+        PreviewKeyDown -= OnHotkeyRecordKeyDown;
+        PreviewMouseDown -= OnRecordingMouseDown;
+
+        // 恢复样式
+        if (_recordingTarget == "ToggleAll")
+        {
+            ToggleAllHotkeyText.Text = _settings.ToggleAllHotkey;
+            ToggleAllHotkeyBox.BorderBrush = NormalBorderBrush;
+            ToggleAllHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
+        }
+        else if (_recordingTarget == "ToggleCurrent")
+        {
+            ToggleCurrentHotkeyText.Text = _settings.ToggleCurrentHotkey;
+            ToggleCurrentHotkeyBox.BorderBrush = NormalBorderBrush;
+            ToggleCurrentHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
+        }
+
+        _recordingTarget = null;
+    }
+
+    private void OnRecordingMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // 检查点击是否在快捷键框上（如果是，由框自己的 Click 事件处理）
+        var source = e.OriginalSource as DependencyObject;
+        while (source != null)
+        {
+            if (source == ToggleAllHotkeyBox || source == ToggleCurrentHotkeyBox)
+                return;
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        StopRecording();
+    }
+
+    private void OnHotkeyRecordKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+
+        // 获取实际按键（处理 Alt 等系统键）
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        // 忽略纯修饰键按下
+        if (key == Key.LeftAlt || key == Key.RightAlt ||
+            key == Key.LeftCtrl || key == Key.RightCtrl ||
+            key == Key.LeftShift || key == Key.RightShift ||
+            key == Key.LWin || key == Key.RWin)
+            return;
+
+        // 拒绝小键盘数字键（NumPad 的 VK 码与主键盘不同，会导致快捷键不生效）
+        if (key >= Key.NumPad0 && key <= Key.NumPad9)
+            return;
+
+        // Escape 取消录制
+        if (key == Key.Escape)
+        {
+            StopRecording();
+            return;
+        }
+
+        // 获取当前修饰键
+        var modifiers = Keyboard.Modifiers;
+
+        // 至少需要一个修饰键
+        if (modifiers == ModifierKeys.None)
+            return;
+
+        // 格式化快捷键字符串
+        var hotkeyStr = HotkeyStringHelper.Format(modifiers, key);
+        if (string.IsNullOrEmpty(hotkeyStr))
+            return; // 不支持的按键
+
+        // 校验合法性
+        if (!HotkeyStringHelper.IsValid(hotkeyStr))
+            return;
+
+        // 检查冲突
+        var target = _recordingTarget!;
+        var otherHotkey = target == "ToggleAll" ? _settings.ToggleCurrentHotkey : _settings.ToggleAllHotkey;
+        if (string.Equals(hotkeyStr, otherHotkey, StringComparison.OrdinalIgnoreCase))
+        {
+            HotkeyConflictWarning.Text = "两个快捷键不能相同";
+            HotkeyConflictWarning.Visibility = Visibility.Visible;
+            return;
+        }
+
+        // 验证快捷键是否可被操作系统注册（跳过与当前值相同的情况，因为应用自身已注册）
+        var currentHotkey = target == "ToggleAll" ? _settings.ToggleAllHotkey : _settings.ToggleCurrentHotkey;
+        if (!string.Equals(hotkeyStr, currentHotkey, StringComparison.OrdinalIgnoreCase)
+            && !_hotkeyService.TestRegister(hotkeyStr))
+        {
+            HotkeyConflictWarning.Text = "该快捷键已被其他程序占用";
+            HotkeyConflictWarning.Visibility = Visibility.Visible;
+            return;
+        }
+
+        HotkeyConflictWarning.Visibility = Visibility.Collapsed;
+
+        // 保存并更新 UI
+        PreviewKeyDown -= OnHotkeyRecordKeyDown;
+        PreviewMouseDown -= OnRecordingMouseDown;
+
+        if (target == "ToggleAll")
+        {
+            _settings.ToggleAllHotkey = hotkeyStr;
+            ToggleAllHotkeyText.Text = hotkeyStr;
+            ToggleAllHotkeyBox.BorderBrush = NormalBorderBrush;
+            ToggleAllHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
+        }
+        else
+        {
+            _settings.ToggleCurrentHotkey = hotkeyStr;
+            ToggleCurrentHotkeyText.Text = hotkeyStr;
+            ToggleCurrentHotkeyBox.BorderBrush = NormalBorderBrush;
+            ToggleCurrentHotkeyBox.Background = new SolidColorBrush(
+                System.Windows.Media.Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
+        }
+
+        _recordingTarget = null;
+        SaveNow();
+    }
+
+    #endregion
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {

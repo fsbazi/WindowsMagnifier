@@ -574,6 +574,79 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- ===== 卡片：快捷键 ===== -->
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="快捷键" Style="{StaticResource SectionLabel}"/>
+
+                            <!-- 全局显示/隐藏 -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="全局显示/隐藏"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="13"/>
+                                    <TextBlock Text="切换所有屏幕的放大镜窗口"
+                                               Style="{StaticResource DescText}"/>
+                                </StackPanel>
+                                <Border x:Name="ToggleAllHotkeyBox" Grid.Column="1"
+                                        CornerRadius="6" Padding="12,6"
+                                        Cursor="Hand"
+                                        Background="#15FFFFFF"
+                                        BorderThickness="1"
+                                        BorderBrush="#25FFFFFF"
+                                        MouseLeftButtonDown="ToggleAllHotkeyBox_Click">
+                                    <TextBlock x:Name="ToggleAllHotkeyText"
+                                               Text="Win+Alt+M"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+
+                            <!-- 当前屏幕显示/隐藏 -->
+                            <Grid Margin="0,0,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="当前屏幕显示/隐藏"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="13"/>
+                                    <TextBlock Text="切换鼠标所在屏幕的放大镜窗口"
+                                               Style="{StaticResource DescText}"/>
+                                </StackPanel>
+                                <Border x:Name="ToggleCurrentHotkeyBox" Grid.Column="1"
+                                        CornerRadius="6" Padding="12,6"
+                                        Cursor="Hand"
+                                        Background="#15FFFFFF"
+                                        BorderThickness="1"
+                                        BorderBrush="#25FFFFFF"
+                                        MouseLeftButtonDown="ToggleCurrentHotkeyBox_Click">
+                                    <TextBlock x:Name="ToggleCurrentHotkeyText"
+                                               Text="Win+Alt+N"
+                                               Foreground="{StaticResource TextPrimary}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                            </Grid>
+
+                            <!-- 快捷键冲突提示 -->
+                            <TextBlock x:Name="HotkeyConflictWarning"
+                                       Text="两个快捷键不能相同"
+                                       Foreground="#E8313A"
+                                       FontSize="11"
+                                       Margin="0,8,0,0"
+                                       Visibility="Collapsed"/>
+                        </StackPanel>
+                    </Border>
+
                     <!-- ===== 卡片：其他选项 ===== -->
                     <Border Style="{StaticResource Card}">
                         <StackPanel>

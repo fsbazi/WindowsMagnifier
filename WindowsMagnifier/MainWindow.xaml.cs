@@ -122,7 +122,7 @@ public partial class MainWindow : Window
         System.Windows.MessageBox.Show(
             $"眼眸 v{versionStr}\n\n" +
             "眼眸 - 桌面放大辅助工具\n\n" +
-            "快捷键：Win + Alt + M 切换显示/隐藏\n" +
+            $"快捷键：{_settings.ToggleAllHotkey} 切换显示/隐藏\n" +
             "右键菜单：设置 / 关于 / 退出",
             "关于",
             MessageBoxButton.OK,

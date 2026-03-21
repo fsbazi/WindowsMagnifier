@@ -16,6 +16,7 @@ public partial class App : System.Windows.Application
     private static readonly LogService _log = LogService.Instance;
 
     private Mutex? _mutex;
+    private bool _mutexOwned;
     private ConfigService? _configService;
     private AppSettings? _settings;
     private DisplayManager? _displayManager;
@@ -28,6 +29,11 @@ public partial class App : System.Windows.Application
     /// 因全屏而被隐藏的显示器设备名集合（与用户手动隐藏区分）
     /// </summary>
     private readonly HashSet<string> _fullScreenHiddenDisplays = new();
+
+    /// <summary>
+    /// 用户通过"当前屏幕切换"手动隐藏的显示器设备名集合
+    /// </summary>
+    private readonly HashSet<string> _manualHiddenDisplays = new();
     private readonly string _logPath = LogService.Instance.ErrorLogPath;
     private bool _magInitialized;
     private bool _windowsVisible = true;
@@ -47,6 +53,7 @@ public partial class App : System.Windows.Application
             Shutdown();
             return;
         }
+        _mutexOwned = true;
 
         // 设置全局异常处理
         AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
@@ -115,10 +122,11 @@ public partial class App : System.Windows.Application
                 _windowsVisible = false;
             }
 
-            // 注册全局快捷键 Win+Alt+M
+            // 注册全局快捷键
             _hotkeyService = new HotkeyService();
-            _hotkeyService.HotkeyTriggered += ToggleVisibility;
-            _hotkeyService.Register();
+            _hotkeyService.ToggleAllTriggered += ToggleVisibility;
+            _hotkeyService.ToggleCurrentTriggered += ToggleCurrentScreenVisibility;
+            _hotkeyService.Register(_settings.ToggleAllHotkey, _settings.ToggleCurrentHotkey);
 
             // 首次启动引导
             ShowFirstRunGuide();
@@ -130,6 +138,9 @@ public partial class App : System.Windows.Application
             Shutdown();
         }
     }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativeTypes.POINT lpPoint);
 
     #region 全局快捷键
 
@@ -146,8 +157,9 @@ public partial class App : System.Windows.Application
         }
         else
         {
-            // 用户手动显示：恢复非全屏显示器的窗口，仍在全屏的不恢复
+            // 用户手动显示：恢复非全屏且非手动隐藏的窗口
             _windowsVisible = true;
+            _manualHiddenDisplays.Clear(); // 全局显示时清除单屏隐藏状态
             foreach (var window in _magnifierWindows)
             {
                 if (!_fullScreenHiddenDisplays.Contains(window.Display.DeviceName))
@@ -155,6 +167,37 @@ public partial class App : System.Windows.Application
                     window.Show();
                 }
             }
+        }
+    }
+
+    private void ToggleCurrentScreenVisibility()
+    {
+        if (!_windowsVisible) return; // 全局已隐藏时不操作
+
+        // 获取鼠标当前位置，确定所在显示器
+        if (!GetCursorPos(out var pt)) return;
+        var mousePos = new System.Windows.Point(pt.X, pt.Y);
+        var currentDisplay = _displayManager?.GetDisplayFromPoint(mousePos);
+        if (currentDisplay == null) return;
+
+        var deviceName = currentDisplay.DeviceName;
+        var window = _magnifierWindows.FirstOrDefault(w => w.Display.DeviceName == deviceName);
+        if (window == null) return;
+
+        if (_manualHiddenDisplays.Contains(deviceName))
+        {
+            // 恢复显示（如果不是因全屏隐藏）
+            _manualHiddenDisplays.Remove(deviceName);
+            if (!_fullScreenHiddenDisplays.Contains(deviceName))
+            {
+                window.Show();
+            }
+        }
+        else
+        {
+            // 隐藏该屏幕的放大镜
+            _manualHiddenDisplays.Add(deviceName);
+            window.Hide();
         }
     }
 
@@ -183,11 +226,12 @@ public partial class App : System.Windows.Application
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         var versionStr = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
 
+        var toggleHotkey = _settings?.ToggleAllHotkey ?? "Win+Alt+M";
         System.Windows.MessageBox.Show(
             "欢迎使用眼眸！\n\n" +
             "使用提示：\n" +
             "  - 右键点击窗口可打开设置或退出\n" +
-            "  - Win + Alt + M 快捷键可切换显示/隐藏\n" +
+            $"  - {toggleHotkey} 快捷键可切换显示/隐藏\n" +
             "  - 拖拽底部边框可调整窗口高度\n" +
             "  - 每个显示器可独立设置放大倍数",
             $"眼眸 v{versionStr}",
@@ -213,6 +257,11 @@ public partial class App : System.Windows.Application
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         _log.LogError($"DispatcherUnhandledException: {e.Exception}");
+
+        // 致命异常不吞掉，让应用终止
+        if (e.Exception is OutOfMemoryException or StackOverflowException or AccessViolationException)
+            return; // e.Handled 保持 false，应用将终止
+
         e.Handled = true;
 
         // 高频异常保护：5 秒内达到 3 次则强制退出，防止渲染循环异常导致 UI 冻结
@@ -277,18 +326,19 @@ public partial class App : System.Windows.Application
 
         try
         {
-            // 先确保窗口已显示（跳过因全屏而隐藏的显示器）
+            // 先确保窗口已显示（跳过因全屏或手动隐藏的显示器）
             _windowsVisible = true;
             foreach (var window in _magnifierWindows)
             {
-                if (!_fullScreenHiddenDisplays.Contains(window.Display.DeviceName))
+                if (!_fullScreenHiddenDisplays.Contains(window.Display.DeviceName) &&
+                    !_manualHiddenDisplays.Contains(window.Display.DeviceName))
                 {
                     window.Show();
                 }
             }
 
             var displays = _displayManager!.GetDisplays();
-            var settingsWindow = new SettingsWindow(_settings!, _configService!, displays);
+            var settingsWindow = new SettingsWindow(_settings!, _configService!, displays, _hotkeyService!);
             var owner = _magnifierWindows.FirstOrDefault(w => w.IsVisible);
             if (owner != null)
                 settingsWindow.Owner = owner;
@@ -314,6 +364,9 @@ public partial class App : System.Windows.Application
 
         // 更新全屏检测设置
         UpdateFullScreenDetectorState();
+
+        // 重新注册快捷键（设置可能已变更）
+        _hotkeyService?.ReRegister(_settings!.ToggleAllHotkey, _settings.ToggleCurrentHotkey);
 
         foreach (var window in _magnifierWindows)
         {
@@ -364,7 +417,7 @@ public partial class App : System.Windows.Application
         {
             // 该显示器退出全屏，恢复对应的放大镜窗口（仅当用户未手动隐藏时）
             _fullScreenHiddenDisplays.Remove(displayName);
-            if (_windowsVisible)
+            if (_windowsVisible && !_manualHiddenDisplays.Contains(displayName))
             {
                 var window = _magnifierWindows.FirstOrDefault(w => w.Display.DeviceName == displayName);
                 window?.Show();
@@ -386,6 +439,7 @@ public partial class App : System.Windows.Application
             }
             _magnifierWindows.Clear();
             _fullScreenHiddenDisplays.Clear();
+            _manualHiddenDisplays.Clear();
 
             CreateMagnifierWindows();
 
@@ -489,8 +543,12 @@ public partial class App : System.Windows.Application
             _magInitialized = false;
         }
 
-        // 释放 Mutex
-        _mutex?.ReleaseMutex();
+        // 释放 Mutex（仅在拥有所有权时释放，避免 ApplicationException）
+        if (_mutexOwned)
+        {
+            _mutex?.ReleaseMutex();
+            _mutexOwned = false;
+        }
         _mutex?.Dispose();
     }
 }

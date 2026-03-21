@@ -120,14 +120,14 @@ public class TrackingManager : IDisposable
         // 否则前台窗口忙时会阻塞钩子线程导致全系统输入冻结
         var version = Interlocked.Increment(ref _debounceVersion);
 
-        Task.Run(() => DebouncedCaretLookup(version));
+        _ = Task.Run(async () => await DebouncedCaretLookup(version));
     }
 
     /// <summary>
     /// 防抖获取光标位置 - 在后台线程中延迟执行，避免阻塞键盘钩子线程。
     /// 使用版本号进行防抖：延迟后检查版本号是否仍匹配，不匹配则说明有更新的按键，放弃本次。
     /// </summary>
-    private async void DebouncedCaretLookup(int version)
+    private async Task DebouncedCaretLookup(int version)
     {
         try
         {
@@ -174,9 +174,10 @@ public class TrackingManager : IDisposable
                     DateTime.UtcNow.Ticks + UiaBackoffTicks);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 光标位置获取失败时静默忽略，保持之前的鼠标位置
+            // 光标位置获取失败时记录日志，保持之前的鼠标位置
+            System.Diagnostics.Debug.WriteLine($"[Tracking] DebouncedCaretLookup error: {ex.Message}");
         }
     }
 
