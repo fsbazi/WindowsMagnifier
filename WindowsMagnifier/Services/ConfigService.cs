@@ -79,11 +79,13 @@ public class ConfigService
                 }
 
                 var json = JsonSerializer.Serialize(settings, _jsonOptions);
-                File.WriteAllText(_configPath, json);
+                var tempPath = _configPath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, _configPath, overwrite: true);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[Config] Save error: {ex.Message}");
+                LogService.Instance.LogError($"[Config] Save error: {ex.Message}");
             }
         }
     }
