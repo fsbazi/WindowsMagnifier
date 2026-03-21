@@ -52,29 +52,29 @@ public partial class App : System.Windows.Application
 
         try
         {
-            _log.LogError("Application starting...");
+            _log.LogDebug("Application starting...");
 
             // 初始化配置
             _configService = new ConfigService();
             _settings = _configService.Load();
-            _log.LogError("Config loaded");
+            _log.LogDebug("Config loaded");
 
             // 初始化显示器管理
             _displayManager = new DisplayManager();
             _displayManager.DisplaysChanged += OnDisplaysChanged;
-            _log.LogError($"DisplayManager created, displays: {_displayManager.GetDisplays().Count}");
+            _log.LogDebug($"DisplayManager created, displays: {_displayManager.GetDisplays().Count}");
 
             // 初始化焦点管理
             _displayFocusManager = new DisplayFocusManager(_displayManager, _settings.DisplaySwitchDelay);
             _displayFocusManager.ActiveDisplayChanged += OnActiveDisplayChanged;
             _displayFocusManager.Initialize();
-            _log.LogError("DisplayFocusManager initialized");
+            _log.LogDebug("DisplayFocusManager initialized");
 
             // 初始化跟踪管理
             _trackingManager = new TrackingManager(_settings);
             _trackingManager.PositionChanged += OnPositionChanged;
             _trackingManager.Start();
-            _log.LogError("TrackingManager started");
+            _log.LogDebug("TrackingManager started");
 
             // 初始化全屏检测（如果启用）
             if (_settings.HideOnFullScreen)
@@ -82,7 +82,7 @@ public partial class App : System.Windows.Application
                 _fullScreenDetector = new FullScreenDetector(_displayManager);
                 _fullScreenDetector.DisplayFullScreenStateChanged += OnDisplayFullScreenStateChanged;
                 _fullScreenDetector.Start();
-                _log.LogError("FullScreenDetector started");
+                _log.LogDebug("FullScreenDetector started");
             }
 
             // 初始化 Magnification API（应用级别，所有窗口共享）
@@ -93,18 +93,18 @@ public partial class App : System.Windows.Application
             }
             else
             {
-                _log.LogError("MagInitialize succeeded");
+                _log.LogDebug("MagInitialize succeeded");
             }
 
             // 创建放大镜窗口
             CreateMagnifierWindows();
-            _log.LogError("Magnifier windows created");
+            _log.LogDebug("Magnifier windows created");
 
             // 显示窗口（如果不是最小化启动）
             if (!_settings.StartMinimized)
             {
                 ShowAllWindows();
-                _log.LogError("Windows shown");
+                _log.LogDebug("Windows shown");
             }
             else
             {
@@ -171,7 +171,13 @@ public partial class App : System.Windows.Application
                 Directory.CreateDirectory(configDir);
             File.WriteAllText(guideFlagPath, "");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _log.LogDebug($"首次运行标志文件创建失败: {ex.Message}");
+        }
+
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var versionStr = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "1.0.0";
 
         System.Windows.MessageBox.Show(
             "欢迎使用眼眸！\n\n" +
@@ -180,7 +186,7 @@ public partial class App : System.Windows.Application
             "  - Win + Alt + M 快捷键可切换显示/隐藏\n" +
             "  - 拖拽底部边框可调整窗口高度\n" +
             "  - 每个显示器可独立设置放大倍数",
-            "眼眸 v1.0",
+            $"眼眸 v{versionStr}",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
