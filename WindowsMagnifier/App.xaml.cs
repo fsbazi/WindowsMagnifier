@@ -267,7 +267,8 @@ public partial class App : System.Windows.Application
         bool firstWindow = true;
         foreach (var display in displays)
         {
-            var window = new MainWindow(display, _settings!, firstWindow);
+            var window = new MainWindow(display, _settings!, firstWindow,
+                pos => _displayFocusManager?.UpdateFromMousePosition(pos));
             window.SettingsRequested += ShowSettingsWindow;
             window.ExitRequested += OnWindowExitRequested;
             window.SettingsModified += OnSettingsModified;
@@ -430,14 +431,6 @@ public partial class App : System.Windows.Application
             var isActive = window.Display.DeviceName == activeDisplay?.DeviceName;
             window.SetActive(isActive);
         }
-    }
-
-    /// <summary>
-    /// 由活动的 MainWindow 在 OnRendering 中调用，将显示器焦点更新从钩子线程移到渲染循环（UI 线程）
-    /// </summary>
-    public void UpdateDisplayFocusFromRendering(System.Windows.Point position)
-    {
-        _displayFocusManager?.UpdateFromMousePosition(position);
     }
 
     private void OnPositionChanged(System.Windows.Point position, TrackingMode mode)

@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly AppSettings _settings;
     private readonly AppBarService _appBarService;
     private readonly bool _showInTaskbar;
+    private readonly Action<Point>? _onDisplayFocusUpdate;
 
     private bool _isActive;
     private bool _isResizing;
@@ -70,7 +71,7 @@ public partial class MainWindow : Window
     private const int SW_HIDE = 0;
     private const int SW_SHOWNA = 8; // 显示但不激活
 
-    public MainWindow(DisplayInfo display, AppSettings settings, bool showInTaskbar = false)
+    public MainWindow(DisplayInfo display, AppSettings settings, bool showInTaskbar = false, Action<Point>? onDisplayFocusUpdate = null)
     {
         InitializeComponent();
 
@@ -79,6 +80,7 @@ public partial class MainWindow : Window
         _cachedMagLevel = settings.GetMagnificationLevel(display.DeviceName);
         _appBarService = new AppBarService();
         _showInTaskbar = showInTaskbar;
+        _onDisplayFocusUpdate = onDisplayFocusUpdate;
 
         ShowInTaskbar = showInTaskbar;
 
@@ -358,7 +360,7 @@ public partial class MainWindow : Window
                 _hasPosition = true;
 
                 // 将显示器焦点更新从钩子线程移到渲染循环中执行
-                (System.Windows.Application.Current as App)?.UpdateDisplayFocusFromRendering(_lastPosition);
+                _onDisplayFocusUpdate?.Invoke(_lastPosition);
             }
         }
 
