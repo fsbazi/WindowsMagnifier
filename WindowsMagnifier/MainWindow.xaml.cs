@@ -483,17 +483,8 @@ public partial class MainWindow : Window
         SettingsModified?.Invoke();
 
         // 调整 Magnifier 子窗口大小
-        if (_hwndMag != IntPtr.Zero)
-        {
-            var physicalWidth = (int)(Width * _dpiScaleX);
-            var physicalHeight = (int)(Height * _dpiScaleY);
-            var borderHeight = (int)(1 * _dpiScaleY);
-            var magHeight = physicalHeight - borderHeight;
-            MagnificationApi.SetWindowPos(_hwndMag, IntPtr.Zero, 0, 0, physicalWidth, magHeight, 0);
-
-            var transform = MagnificationApi.MAGTRANSFORM.CreateIdentity(_settings.GetMagnificationLevel(_display.DeviceName));
-            MagnificationApi.MagSetWindowTransform(_hwndMag, ref transform);
-        }
+        _cachedMagLevel = _settings.GetMagnificationLevel(_display.DeviceName);
+        ResizeMagnifierChild();
     }
 
     public void UpdateSettings(AppSettings settings)
@@ -505,16 +496,20 @@ public partial class MainWindow : Window
         UpdateWindowSize();
         _appBarService.UpdateHeight(settings.WindowHeight);
 
-        if (_hwndMag != IntPtr.Zero)
-        {
-            var physicalWidth = (int)(Width * _dpiScaleX);
-            var physicalHeight = (int)(Height * _dpiScaleY);
-            var borderHeight = (int)(1 * _dpiScaleY);
-            var magHeight = physicalHeight - borderHeight;
-            MagnificationApi.SetWindowPos(_hwndMag, IntPtr.Zero, 0, 0, physicalWidth, magHeight, 0);
+        ResizeMagnifierChild();
+    }
 
-            var transform = MagnificationApi.MAGTRANSFORM.CreateIdentity(_cachedMagLevel);
-            MagnificationApi.MagSetWindowTransform(_hwndMag, ref transform);
-        }
+    private void ResizeMagnifierChild()
+    {
+        if (_hwndMag == IntPtr.Zero) return;
+
+        var physicalWidth = (int)(Width * _dpiScaleX);
+        var physicalHeight = (int)(Height * _dpiScaleY);
+        var borderHeight = (int)(1 * _dpiScaleY);
+        var magHeight = physicalHeight - borderHeight;
+        MagnificationApi.SetWindowPos(_hwndMag, IntPtr.Zero, 0, 0, physicalWidth, magHeight, 0);
+
+        var transform = MagnificationApi.MAGTRANSFORM.CreateIdentity(_cachedMagLevel);
+        MagnificationApi.MagSetWindowTransform(_hwndMag, ref transform);
     }
 }
