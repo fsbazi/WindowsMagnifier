@@ -18,10 +18,10 @@ public class HotkeyService : IDisposable
 
     private static readonly LogService _log = LogService.Instance;
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     private HwndSource? _hotkeySource;

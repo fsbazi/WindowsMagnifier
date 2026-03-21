@@ -33,6 +33,10 @@ public partial class App : System.Windows.Application
     private bool _windowsVisible = true;
     private volatile bool _wasKeyboardMode;
 
+    // 异常计数器：5 秒内达到 3 次未处理异常则强制退出
+    private int _unhandledExceptionCount;
+    private long _firstExceptionTicks;
+
     private void Application_Startup(object sender, StartupEventArgs e)
     {
         // 单实例检查
@@ -199,20 +203,34 @@ public partial class App : System.Windows.Application
     {
         var ex = e.ExceptionObject as Exception;
         _log.LogError($"UnhandledException: {ex}");
-        System.Windows.MessageBox.Show($"未处理的异常: {ex?.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void OnThreadException(object sender, System.Threading.ThreadExceptionEventArgs e)
     {
         _log.LogError($"ThreadException: {e.Exception}");
-        System.Windows.MessageBox.Show($"线程异常: {e.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
     private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
     {
         _log.LogError($"DispatcherUnhandledException: {e.Exception}");
-        System.Windows.MessageBox.Show($"调度器异常: {e.Exception.Message}", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
         e.Handled = true;
+
+        // 高频异常保护：5 秒内达到 3 次则强制退出，防止渲染循环异常导致 UI 冻结
+        var now = Environment.TickCount64;
+        if (now - _firstExceptionTicks > 5000)
+        {
+            _firstExceptionTicks = now;
+            _unhandledExceptionCount = 1;
+        }
+        else
+        {
+            _unhandledExceptionCount++;
+            if (_unhandledExceptionCount > 2)
+            {
+                _log.LogError("5 秒内发生 3 次未处理异常，强制退出应用");
+                Shutdown();
+            }
+        }
     }
 
     private void CreateMagnifierWindows()

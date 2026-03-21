@@ -54,4 +54,23 @@ public class FullScreenDetectorTests
         Assert.False(FullScreenDetector.IsFullScreenMatch(
             -30, -30, 1960, 1120, WS_CAPTION, 0, 0, 1920, 1080));
     }
+
+    [Fact]
+    public void IsFullScreenMatch_BorderlessMaximized_ReturnsFalse()
+    {
+        // 无边框最大化窗口（如 Electron 应用）精确匹配屏幕尺寸，但有 WS_MAXIMIZE 标志
+        Assert.False(FullScreenDetector.IsFullScreenMatch(
+            0, 0, 1920, 1080, WS_MAXIMIZE, 0, 0, 1920, 1080));
+    }
+
+    [Fact]
+    public void IsFullScreenMatch_BorderlessFullscreen_ReturnsTrue()
+    {
+        // 无边框全屏窗口（副显示器，非零起始坐标）应被正确识别
+        var result = FullScreenDetector.IsFullScreenMatch(
+            1920, 0, 3840, 1080,  // 窗口在副显示器上
+            0,                      // 无边框无最大化
+            1920, 0, 1920, 1080);  // 副显示器 bounds
+        Assert.True(result);
+    }
 }

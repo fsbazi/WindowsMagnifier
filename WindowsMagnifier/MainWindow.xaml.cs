@@ -355,6 +355,24 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnRendering(object? sender, EventArgs e)
     {
+        try
+        {
+            OnRenderingCore();
+        }
+        catch (Exception ex)
+        {
+            Log($"OnRendering 异常，停止渲染: {ex}");
+            CompositionTarget.Rendering -= OnRendering;
+            _isActive = false;
+            // 显示非活动遮罩，给用户视觉反馈
+            InactiveOverlay.Visibility = Visibility.Visible;
+            if (_hwndMag != IntPtr.Zero)
+                ShowWindow(_hwndMag, SW_HIDE);
+        }
+    }
+
+    private void OnRenderingCore()
+    {
         if (!_isActive) return;
 
         // 键盘跟踪模式下不覆盖 _lastPosition，保留 caret 位置

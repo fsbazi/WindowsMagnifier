@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using WindowsMagnifier.Models;
 
@@ -70,10 +72,18 @@ public class FullScreenDetector : IDisposable
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
     private const int GWL_STYLE = -16;
     private const int WS_CAPTION = 0x00C00000;
     private const int WS_MAXIMIZE = 0x01000000;
     private const int DWMWA_CLOAKED = 14;
+
+    private static readonly LogService _log = LogService.Instance;
 
     #endregion
 
@@ -165,6 +175,14 @@ public class FullScreenDetector : IDisposable
             // 3. 触发变化事件
             if (changes.Count > 0)
             {
+                // 记录全屏状态变化的调试信息，便于排查误判
+                foreach (var (displayName, isFullScreen) in changes)
+                {
+                    var hwnd = isFullScreen && _fullScreenWindows.TryGetValue(displayName, out var h) ? h : IntPtr.Zero;
+                    var windowInfo = GetWindowDebugInfo(hwnd);
+                    _log.LogDebug($"[FullScreenDetector] 显示器={displayName}, 全屏={isFullScreen}, {windowInfo}");
+                }
+
                 Application.Current?.Dispatcher.BeginInvoke(() =>
                 {
                     foreach (var (displayName, isFullScreen) in changes)
@@ -250,7 +268,9 @@ public class FullScreenDetector : IDisposable
 
         if (sizeMatchesExact && positionMatchesExact)
         {
-            // 尺寸位置精确匹配，无论有无边框都判定为全屏
+            // 排除最大化窗口（无论有无边框），最大化窗口不是全屏应用
+            bool isMaximized = (windowStyle & WS_MAXIMIZE) != 0;
+            if (isMaximized) return false;
             return true;
         }
 
@@ -287,6 +307,35 @@ public class FullScreenDetector : IDisposable
             rect.Left, rect.Top, rect.Right, rect.Bottom,
             style,
             bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+    }
+
+    /// <summary>
+    /// 获取窗口的调试信息（类名、进程名），用于诊断全屏误判
+    /// </summary>
+    private static string GetWindowDebugInfo(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return "hwnd=0";
+
+        var sb = new StringBuilder(256);
+        GetClassName(hwnd, sb, sb.Capacity);
+        var className = sb.ToString();
+
+        string processName = "unknown";
+        try
+        {
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (pid != 0)
+            {
+                using var proc = Process.GetProcessById((int)pid);
+                processName = proc.ProcessName;
+            }
+        }
+        catch
+        {
+            // 进程可能已退出
+        }
+
+        return $"hwnd=0x{hwnd:X}, class={className}, process={processName}";
     }
 
     /// <summary>
