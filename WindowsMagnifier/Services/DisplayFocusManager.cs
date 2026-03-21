@@ -13,9 +13,10 @@ public class DisplayFocusManager : IDisposable
     private readonly DisplayManager _displayManager;
     private readonly int _switchDelayMs;
 
-    private DisplayInfo? _activeDisplay;
+    private volatile DisplayInfo? _activeDisplay;
     private readonly System.Timers.Timer _switchTimer;
-    private DisplayInfo? _pendingDisplay;
+    private volatile DisplayInfo? _pendingDisplay;
+    private volatile bool _disposed;
 
     /// <summary>
     /// 当前活动的显示器
@@ -73,6 +74,7 @@ public class DisplayFocusManager : IDisposable
 
     private void OnSwitchTimerElapsed(object? sender, System.Timers.ElapsedEventArgs e)
     {
+        if (_disposed) return;
         if (_pendingDisplay == null) return;
 
         _activeDisplay = _pendingDisplay;
@@ -96,6 +98,7 @@ public class DisplayFocusManager : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _switchTimer.Stop();
         _switchTimer.Dispose();
         GC.SuppressFinalize(this);
