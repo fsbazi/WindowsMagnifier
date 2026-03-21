@@ -400,7 +400,7 @@ public partial class App : System.Windows.Application
     private void OnDisplaysChanged()
     {
         // 显示器配置变化，重建窗口
-        Current.Dispatcher.BeginInvoke(() =>
+        Current?.Dispatcher?.BeginInvoke(() =>
         {
             foreach (var window in _magnifierWindows)
             {
@@ -449,7 +449,7 @@ public partial class App : System.Windows.Application
             if (_wasKeyboardMode)
             {
                 _wasKeyboardMode = false;
-                Current.Dispatcher.BeginInvoke(() =>
+                Current?.Dispatcher?.BeginInvoke(() =>
                 {
                     foreach (var window in _magnifierWindows)
                     {
@@ -462,7 +462,7 @@ public partial class App : System.Windows.Application
 
         // 键盘模式
         _wasKeyboardMode = true;
-        Current.Dispatcher.BeginInvoke(() =>
+        Current?.Dispatcher?.BeginInvoke(() =>
         {
             // 根据 caret 位置确定所在显示器，而不是用鼠标所在显示器
             var caretDisplay = _displayManager?.GetDisplayFromPoint(position);
