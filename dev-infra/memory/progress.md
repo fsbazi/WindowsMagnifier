@@ -19,6 +19,18 @@
 - [x] 全屏检测排除系统窗口（Progman 误判根因修复）
 - [ ] GitHub Release 未发布
 
+## In-flight 热修复（2026-04-12）
+
+**Change**: `fix-keyboard-tracking-latching-bug`（OpenSpec, 13/22 任务完成）
+
+- [x] §1 可观测性 — Debug.WriteLine → LogService, 新增 backoff 进入/退出日志点
+- [x] §2 Circuit Breaker 归零 — `TryGetCaretViaUIAutomation` 入口三段式重构
+- [x] §3 构建 / 发布 — Release + Debug 0 error, 单文件 publish 到 `release/patched/眼眸.exe`
+- [ ] §4 手工回归（等用户现场验证, 关键门槛: §4.4 无干预自恢复）
+- [ ] §5 validate / commit / archive（依赖 §4 通过）
+
+根因: `TrackingManager._consecutiveUiaTimeouts` 在 10 秒降级窗口过期后不归零, 导致"首次重试失败立即再合闸"死循环, 键盘跟随对所有走 UIA 路径的应用全局锁死, 只有一次 Win32 caret 成功（用户切到记事本打字）才能解锁。现场已复现确认。
+
 ## 审查记录
 
 | 轮次 | 类型 | 发现 | 结果 |
