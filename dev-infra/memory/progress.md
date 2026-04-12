@@ -19,7 +19,7 @@
 - [x] 全屏检测排除系统窗口（Progman 误判根因修复）
 - [ ] GitHub Release 未发布
 
-## In-flight 热修复（2026-04-12）
+## In-flight 热修复 #1（2026-04-12 00:21）
 
 **Change**: `fix-keyboard-tracking-latching-bug`（OpenSpec, 13/22 任务完成）
 
@@ -29,7 +29,19 @@
 - [ ] §4 手工回归（等用户现场验证, 关键门槛: §4.4 无干预自恢复）
 - [ ] §5 validate / commit / archive（依赖 §4 通过）
 
-根因: `TrackingManager._consecutiveUiaTimeouts` 在 10 秒降级窗口过期后不归零, 导致"首次重试失败立即再合闸"死循环, 键盘跟随对所有走 UIA 路径的应用全局锁死, 只有一次 Win32 caret 成功（用户切到记事本打字）才能解锁。现场已复现确认。
+根因: `TrackingManager._consecutiveUiaTimeouts` 在 10 秒降级窗口过期后不归零, 导致"首次重试失败立即再合闸"死循环。
+
+## In-flight 热修复 #2（2026-04-12 12:35）
+
+**问题**: 显示器关闭/打开后 UIA 静默失败（debug.log 零 Tracking 条目）
+
+- [x] 根因分析 — UIA 失败走静默路径（return false 无日志），不经过超时/熔断器
+- [x] 显示器变化监听 — `SystemEvents.DisplaySettingsChanged` + UIA 状态重置
+- [x] 静默失败路径补齐诊断日志（5 个路径, 节流 2 秒/条）
+- [x] 构建 / 发布 — `release/patched/眼眸.exe`（71,807,374 bytes, 2026-04-12 12:35）
+- [ ] 用户回归验证 — 关显示器 → 开显示器 → 在微信/QQ 打字 → 检查 debug.log
+
+根因: 显示器开关后 UIA 元素变陈旧（TextPattern 丢失选区或 BoundingRectangle 过大），5 条静默失败路径全部无日志，导致问题完全不可见。
 
 ## 审查记录
 

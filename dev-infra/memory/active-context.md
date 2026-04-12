@@ -2,86 +2,105 @@
 
 **日期:** 2026-04-12
 **项目:** 眼眸 (WindowsMagnifier) — 桌面放大辅助工具
-**版本:** v1.2.1（含一个 in-flight 热修复, 未发布）
+**版本:** v1.2.1（含两个 in-flight 热修复, 未发布）
 **评分:** 9.0/10（代码质量），5.9/10（用户体验）
 **测试:** 98/98 通过（本次未新增）
 
 ## 当前状态
 
-- master 分支最新提交 0acd100（2026-03-21 会话收尾），自那以后仅有本次 in-flight 修复
-- 存在一个活跃的 OpenSpec change: **`fix-keyboard-tracking-latching-bug`**，状态 **13/22 任务完成**
-- 代码改动只触及 `WindowsMagnifier/Services/TrackingManager.cs`（+24/-6 行）
-- 新构建的单文件发布在 `release/patched/眼眸.exe`（71,807,048 bytes, 2026-04-12 00:21）
-- 稳定参考构建 `release/眼眸.exe`（3/21，未覆盖，作为回滚保险）
-- **未 commit 任何代码**，等待用户现场回归验证后再闭环
+- master 分支最新提交 59fb58f（2026-04-12 02:32 会话收尾）
+- 存在一个活跃的 OpenSpec change: **`fix-keyboard-tracking-latching-bug`**
+- **本次新增第二个 in-flight 修复**: 显示器开关后的静默 UIA 失败
+- 代码改动在 `WindowsMagnifier/Services/TrackingManager.cs`
+- 新构建在 `release/patched/眼眸.exe`（71,807,374 bytes, 2026-04-12 12:35）
+- **未 commit 任何代码**，等待用户回归验证
 
 ## 本次会话完成的工作
 
-### 探索阶段（/opsx:explore）
-- 用户报告"键盘跟随时好时坏"
-- 先排查假设：ThreadPool 饥饿（进程 57h 运行, 34 线程稳定, 无证据）→ 排除
-- 排查 UIA 永久阻塞（`LpcReply` 从 1 自动恢复 0）→ 排除
-- 排查 Hook 被 Windows 踢出（从 QQ 切回微信立即恢复跟随）→ 排除
-- 用户纠正"坏的时候所有应用都不跟随"→ 根因从特定应用拉回到全局 latching
-- 用 PowerShell + `System.Windows.Automation.AutomationElement.FocusedElement` 写探针, 复现代码同款 UIA 查询
-- 发现 Windows Terminal `TermControl` 面积 723290 被 40000 阈值过滤, `GetSelection()` 光标空闲时返回空集
-- **根因锁定**: `TrackingManager.TryGetCaretViaUIAutomation` 的 Circuit Breaker `_consecutiveUiaTimeouts` 在 10 秒降级窗口过期后不归零, 导致"首次重试失败立即再合闸"死循环
-- 用户现场验证: 失效时切到记事本打字一次 → `TryGetCaretViaWin32` 成功归零 counter → 回微信立即恢复, 证据链完整
-- `debug.log` 与 `error.log` 零 Tracking 记录, 证实"所有诊断路径走 `Debug.WriteLine` 在 Release 被剪掉"的可观测性盲区
+### 探索阶段
 
-### OpenSpec change 创建
-- `openspec/changes/fix-keyboard-tracking-latching-bug/`
-  - `proposal.md` — Why/What Changes/Capabilities/Impact，显式排除 P2/P3
-  - `design.md` — D1/D2/D3/D4 四个决策 + 风险权衡
-  - `specs/keyboard-tracking/spec.md` — 4 个 Requirement, 10 个 WHEN/THEN 场景
-  - `tasks.md` — 22 项任务分 5 组
-- `openspec validate --strict` 通过
+- 用户报告新触发条件：**关闭/打开显示器后键盘跟随失效**
+- 复现模式：关显示器 → 开显示器 → 微信/QQ 不跟随 → 记事本正常 → 切回微信恢复
+- 用户确认运行的是修补版（上一轮熔断器归零修复的版本）
+- 检查 debug.log：**零 `[Tracking]` 条目** → 失败完全静默
+- 检查 error.log：无近期条目
 
-### 代码实施（P1 可观测性 + P0 修复）
-- 添加 `private static readonly LogService _log = LogService.Instance;` 字段
-- 4 处 `Debug.WriteLine` → `_log.LogDebug("Tracking", ...)`
-- 新增 2 个日志点: `UIA enter backoff (10s)` / `UIA backoff expired, counter reset`
-- `TryGetCaretViaUIAutomation` 入口重构为三段式 Circuit Breaker 判定, 降级窗口刚过期时 `Interlocked.Exchange` 同时清零 `_uiaDisabledUntilTicks` 和 `_consecutiveUiaTimeouts`
-- Release + Debug 构建 0 error, 2 个遗留 warning 与本 change 无关
+### 根因分析
 
-### 构建环境修复
-- 发现 `DOTNET_ROOT=C:\Users\49011\.dotnet` 环境变量指向用户本地 SDK 8.0.419, 默认 `C:\Program Files\dotnet\dotnet.exe` 只含 .NET 6 Runtime
-- 找到正确的构建命令, 记录在 memory 和 tasks 里
+**上一轮修复（熔断器归零）为什么没生效：**
+- 熔断器只处理超时路径（`OperationCanceledException`）
+- 显示器开关后的失败走的是**静默路径**：UIA 调用不超时也不报错，只是返回 false
+- `TryGetCaretViaUIAutomation` 中有 5 条静默失败路径全部无日志
 
-## 下一步（本 change）
+**显示器开关后的具体机制：**
+- UIA 元素变陈旧（TextPattern 丢失选区、BoundingRectangle 返回过大面积）
+- 代码落入 `return false` 分支，不触发任何日志或重试逻辑
+- 切记事本再切回 → 焦点切换事件强制 UIA 刷新 → 恢复正常
+
+### 代码修复（第二轮）
+
+1. **显示器变化监听**：订阅 `SystemEvents.DisplaySettingsChanged`
+   - 检测到变化时重置 `_consecutiveUiaTimeouts` 和 `_uiaDisabledUntilTicks`
+   - 记录 `Display changed, UIA state reset` 日志
+2. **静默失败路径补齐诊断日志**（节流 2 秒/条，避免灌满日志）：
+   - `UIA: FocusedElement null`
+   - `UIA: TextPattern no selection`
+   - `UIA: BoundingRect too large (宽x高)`
+   - `UIA: BoundingRect empty`
+   - `UIA: ElementNotAvailable`
+3. **构建发布**：Release 0 error, 3 个遗留 warning（非本次引入）
+   - `release/patched/眼眸.exe`（71,807,374 bytes, 2026-04-12 12:35）
+
+## 下一步
 
 等用户回归验证后回来：
 
-- ✅ 验证通过（`UIA backoff expired, counter reset` 出现 + 跟随自恢复无需切记事本）
-  → `openspec validate --strict` → 单 commit `fix(magnifier): 修复 UIA 熔断器归零 bug 使键盘跟随自恢复 + 补齐日志` → `openspec archive fix-keyboard-tracking-latching-bug`
-- ❌ 仍有问题
-  → 读 `%APPDATA%\WindowsMagnifier\debug.log` 里带 `[Tracking]` 的行重新进入 explore
+- 用户关闭旧版眼眸 → 启动新版（12:35 构建）
+- 关闭/打开显示器后在微信/QQ 中打字
+- 不管结果如何，查看 `debug.log` 中 `[Tracking]` 行，确认走了哪条路径
+
+### 验证结果分支
+
+- ✅ 修复成功（显示器开关后跟随正常 + 日志显示 `Display changed, UIA state reset`）
+  → 闭环两个修复 → 单 commit → archive change
+- ⚠️ 仍失效但日志可见（能看到具体失败路径如 `TextPattern no selection` 或 `BoundingRect too large`）
+  → 根据日志做针对性修复（第三轮）
+- ❌ 仍失效且仍无日志
+  → 说明 LogService 本身有问题或代码路径未到达
 
 ## 探索中发现的 3 个独立问题（本次不做）
 
 按"一次修复只做一件事"原则明确排除, 各自应起独立 change：
 
-1. **40000 面积阈值过严** — `Services/TrackingManager.cs` line ~332。200×200 在 4K 屏上连正常编辑区都殃及。Windows Terminal / VSCode / Google Docs 受影响。
-2. **TextPattern 空选区回退路径缺失** — line ~314。`GetSelection()` 空数组时未用 `DocumentRange.GetChildren()` 或 degenerate range 的 bounding rect 兜底, 直接 fallback 到 BoundingRectangle 再被 40000 过滤。
-3. **Hook 健康自检（低优先兜底）** — `Services/KeyboardHook.cs`。Windows `LowLevelHooksTimeout` 踢出 hook 后 `_hookId` 仍非零, `Start()` 短路认为还活着。本次未复现, 但机制存在。建议加"重启键盘钩子"按钮或周期性间接检测。
+1. **40000 面积阈值过严** — `Services/TrackingManager.cs`。200×200 在 4K 屏上连正常编辑区都殃及。
+2. **TextPattern 空选区回退路径缺失** — `GetSelection()` 空数组时未兜底。
+3. **Hook 健康自检（低优先兜底）** — `Services/KeyboardHook.cs`。
 
 ## v2.0 功能方向（未动）
 
-见 2026-03-21 会话尾部的 P0/P1 列表: 滚轮调倍数、设置界面字号/对比度、系统托盘、颜色反转、位置可选、焦点十字准星。
+滚轮调倍数、设置界面字号/对比度、系统托盘、颜色反转、位置可选、焦点十字准星。
 
 ## 阻塞项
 
-- `fix-keyboard-tracking-latching-bug` 的 commit + archive 被用户现场回归阻塞（§4.4 无干预自恢复验证是唯一硬门槛）
+- 两个 in-flight 修复的 commit + archive 被用户回归验证阻塞
+- 第二个修复（显示器变化）的有效性未知，可能需要第三轮针对性修复
 
 ## 重要决策（本次）
 
-1. **最小改动 vs 标准三态 CB** — 选最小改动（1 行 `Interlocked.Exchange` 归零 + 注释解释不变量）。三态 CB 会把代码量扩大 10 倍, 对个人工具过度工程。
-2. **归零位置** — 放在 `TryGetCaretViaUIAutomation` 入口的"刚过期"分支, 而不是"进入降级时顺手归零"。理由: 前者保持"连续超时计数"与"降级窗口"两个状态独立, 可读性更强, 未来若想改成"降级内允许小概率探测"时不需要拆耦合。
-3. **P1 日志先行 P0 修复后做** — 有日志才能在实施 P0 时看到计数器行为是否符合预期, 而不是"感觉修好了"。
-4. **不写自动化测试** — bug 核心是 1 行 Interlocked 操作, 真实故障依赖跨进程 RPC 超时无法在内存中复现, 且项目没有现成的测试基础设施。改用可执行的手工回归脚本（tasks §4.4）。
-5. **P2/P3 排除在本 change 之外** — 40000 阈值 / 空选区回退 / Hook 自检, 各自应起单独 change。打包会把范围扩大 3 倍, 引入的风险超过它们解决的。
+1. **静默失败根因判断** — 日志零 Tracking 条目 → 确认失败不经过超时路径 → 熔断器修复与此场景无关
+2. **先加诊断日志再修根因** — 同一次构建同时做，避免多轮构建
+3. **日志节流 2 秒/条** — 避免高频按键灌满日志文件（每秒 30+ 按键 × 500ms 超时）
+4. **`_displayChanged` 字段保留** — 虽然当前只用于标记，后续可能用于切换 UIA 查询策略
 
-## 技术债务（承自 2026-03-21）
+## 重要决策（上一轮，承继）
+
+1. **最小改动 vs 标准三态 CB** — 选最小改动
+2. **归零位置** — 放在 `TryGetCaretViaUIAutomation` 入口的"刚过期"分支
+3. **P1 日志先行 P0 修复后做**
+4. **不写自动化测试**
+5. **P2/P3 排除在本 change 之外**
+
+## 技术债务（承自 2026-03-21 + 新增）
 
 - App.xaml.cs God Object（547 行）→ 提取 WindowVisibilityManager
 - 服务层接口抽象（当前测试覆盖率 18.2%）
@@ -90,4 +109,5 @@
 - DateTime.UtcNow.Ticks → Environment.TickCount64
 - DisplayFocusManager 组合操作非原子
 - FullScreenDetector 200ms 轮询 → ABN_FULLSCREENAPP 回调
-- **本次新增**: `TrackingManager` 三个独立缺陷（见上）
+- TrackingManager 三个独立缺陷（40000 阈值 / 空选区回退 / Hook 自检）
+- **本次新增**: 显示器变化后 UIA 刷新机制可能需要更深层修复（FromHandle 替代 FocusedElement）
