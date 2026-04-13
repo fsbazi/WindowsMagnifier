@@ -1,72 +1,24 @@
 # 活跃上下文
 
-**日期:** 2026-04-12
+**日期:** 2026-04-13
 **项目:** 眼眸 (WindowsMagnifier) — 桌面放大辅助工具
-**版本:** v1.2.1（含两个 in-flight 热修复, 未发布）
+**版本:** v1.2.1（三项热修复已提交, 用户验证通过）
 **评分:** 9.0/10（代码质量），5.9/10（用户体验）
 **测试:** 98/98 通过（本次未新增）
 
 ## 当前状态
 
-- master 分支最新提交 59fb58f（2026-04-12 02:32 会话收尾）
-- 存在一个活跃的 OpenSpec change: **`fix-keyboard-tracking-latching-bug`**
-- **本次新增第二个 in-flight 修复**: 显示器开关后的静默 UIA 失败
-- 代码改动在 `WindowsMagnifier/Services/TrackingManager.cs`
-- 新构建在 `release/patched/眼眸.exe`（71,807,374 bytes, 2026-04-12 12:35）
-- **未 commit 任何代码**，等待用户回归验证
+- master 分支最新提交 c4e4d3f（2026-04-13 键盘跟随三项修复）
+- 代码已 commit，用户验证通过
+- 新构建在 `release/patched/眼眸.exe`
 
-## 本次会话完成的工作
+## 本次会话完成的工作（2026-04-13）
 
-### 探索阶段
-
-- 用户报告新触发条件：**关闭/打开显示器后键盘跟随失效**
-- 复现模式：关显示器 → 开显示器 → 微信/QQ 不跟随 → 记事本正常 → 切回微信恢复
-- 用户确认运行的是修补版（上一轮熔断器归零修复的版本）
-- 检查 debug.log：**零 `[Tracking]` 条目** → 失败完全静默
-- 检查 error.log：无近期条目
-
-### 根因分析
-
-**上一轮修复（熔断器归零）为什么没生效：**
-- 熔断器只处理超时路径（`OperationCanceledException`）
-- 显示器开关后的失败走的是**静默路径**：UIA 调用不超时也不报错，只是返回 false
-- `TryGetCaretViaUIAutomation` 中有 5 条静默失败路径全部无日志
-
-**显示器开关后的具体机制：**
-- UIA 元素变陈旧（TextPattern 丢失选区、BoundingRectangle 返回过大面积）
-- 代码落入 `return false` 分支，不触发任何日志或重试逻辑
-- 切记事本再切回 → 焦点切换事件强制 UIA 刷新 → 恢复正常
-
-### 代码修复（第二轮）
-
-1. **显示器变化监听**：订阅 `SystemEvents.DisplaySettingsChanged`
-   - 检测到变化时重置 `_consecutiveUiaTimeouts` 和 `_uiaDisabledUntilTicks`
-   - 记录 `Display changed, UIA state reset` 日志
-2. **静默失败路径补齐诊断日志**（节流 2 秒/条，避免灌满日志）：
-   - `UIA: FocusedElement null`
-   - `UIA: TextPattern no selection`
-   - `UIA: BoundingRect too large (宽x高)`
-   - `UIA: BoundingRect empty`
-   - `UIA: ElementNotAvailable`
-3. **构建发布**：Release 0 error, 3 个遗留 warning（非本次引入）
-   - `release/patched/眼眸.exe`（71,807,374 bytes, 2026-04-12 12:35）
-
-## 下一步
-
-等用户回归验证后回来：
-
-- 用户关闭旧版眼眸 → 启动新版（12:35 构建）
-- 关闭/打开显示器后在微信/QQ 中打字
-- 不管结果如何，查看 `debug.log` 中 `[Tracking]` 行，确认走了哪条路径
-
-### 验证结果分支
-
-- ✅ 修复成功（显示器开关后跟随正常 + 日志显示 `Display changed, UIA state reset`）
-  → 闭环两个修复 → 单 commit → archive change
-- ⚠️ 仍失效但日志可见（能看到具体失败路径如 `TextPattern no selection` 或 `BoundingRect too large`）
-  → 根据日志做针对性修复（第三轮）
-- ❌ 仍失效且仍无日志
-  → 说明 LogService 本身有问题或代码路径未到达
+1. **日志分析** — 发现整个 Tracking 日志 100% 是失败，无熔断器触发记录
+2. **根因定位** — 终端窗口（cmd/PowerShell/Windows Terminal）的 UIA 查询污染全局 UIA 状态，导致切回微信后跟随失效
+3. **终端窗口排除** — 检测 ConsoleWindowClass + CASCADIA_HOSTING_WINDOW_CLASS，跳过光标查询
+4. **Win32 诊断日志** — 补齐 Win32 caret 失败路径日志
+5. **用户验证通过** — 终端→微信切换后键盘跟随正常
 
 ## 探索中发现的 3 个独立问题（本次不做）
 
@@ -82,8 +34,7 @@
 
 ## 阻塞项
 
-- 两个 in-flight 修复的 commit + archive 被用户回归验证阻塞
-- 第二个修复（显示器变化）的有效性未知，可能需要第三轮针对性修复
+- 无当前阻塞项
 
 ## 重要决策（本次）
 
