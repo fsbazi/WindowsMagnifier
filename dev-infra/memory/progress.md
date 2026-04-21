@@ -29,6 +29,17 @@
 - [x] **诊断日志** — 5 条 UIA 静默失败路径 + Win32 caret 失败路径（节流 2 秒/条）
 - [x] 用户回归验证通过（终端→微信切换正常）
 
+## 热修复合并提交（2026-04-21, 439a3e3）
+
+恢复 Chromium/Electron (QQ / Telegram) 键盘跟随。三项联合修复：
+
+- [x] **新增 MSAA `OBJID_CARET` 路径**（`oleacc.dll`）— 仿 Windows 官方放大镜，Chromium/Electron 类应用的精确 caret 通道，返回 `size=1×18` 像素级矩形。`accLocation` 经 IDispatch late binding 调用，避免 Accessibility.dll 依赖
+- [x] **UIA 方法 B 判据收紧** — `IsElementNearlyFullScreen`（95% 阈值，DPI 虚拟化下易误拒）→ `LooksLikeInputControl`（宽<60% AND 高<30%）。消除 WebView 容器假成功"死定中点"现象
+- [x] **日志节流按 key 分桶** — 共享 `_lastUiaFailLogTicks` → `ConcurrentDictionary<key, ticks>`。此前 Win32 失败每 2 秒刷新节流字段导致 UIA 失败日志 100% 被吞（诊断不可能），现各类消息独立节流
+- [x] **配套诊断日志** — `kb_hit`（OnKeyPressed 入口）+ `uia_enter`（UIA 入口）+ `msaa_ok`/`msaa_fail`/`uia_ok_sel`/`uia_ok_vis`/`uia_ok_bnd` 等成功分支
+- [x] 用户 QQ + Telegram 回归验证通过（日志 `MSAA: OK @1037,887 size=1x18` → `@1113,887` 证实 caret 随打字位移）
+- [x] 诊断迭代：v2（仅阈值）→ v3（诊断日志揭示 BoundingRect 假成功）→ v4（MSAA + 判据收紧）
+
 ## 审查记录
 
 | 轮次 | 类型 | 发现 | 结果 |
