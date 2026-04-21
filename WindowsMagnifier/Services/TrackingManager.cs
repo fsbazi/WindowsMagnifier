@@ -43,8 +43,9 @@ public class TrackingManager : IDisposable
     private const int MaxConsecutiveTimeouts = 3;
     private const long UiaBackoffTicks = 10 * TimeSpan.TicksPerSecond;
 
-    // UIA 静默失败日志节流
-    private long _lastUiaFailLogTicks;
+    // UIA / Win32 / hook 静默失败日志节流: 按 key 分桶, 避免不同消息互相饥饿
+    // (此前共用一个时间戳, Win32 失败每秒刷新 → UIA 失败日志 100% 被吞, 无法诊断)
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _throttleBuckets = new();
     private const long UiaFailLogInterval = 2 * TimeSpan.TicksPerSecond;
 
     // 显示器变化标记
@@ -127,6 +128,9 @@ public class TrackingManager : IDisposable
     {
         if (!_settings.FollowKeyboardInput) return;
 
+        // 诊断: 节流输出"按键事件被钩子接收" 确认全局钩子在任意前台应用下都工作
+        LogThrottled("kb_hit", "Key pressed (hook OK)");
+
         // 钩子回调中只做最小工作：递增版本号并启动后台 caret 查找
         // 使用 volatile int 版本号替代 CTS 防抖，避免每次按键创建/销毁 CTS 对象
         // 注意：不在钩子线程中调用任何跨进程 API（包括 ImmGetContext），
@@ -150,26 +154,34 @@ public class TrackingManager : IDisposable
     }
 
     /// <summary>
-    /// 节流日志：同一类 UIA 失败最多每 2 秒记一次，避免高频按键灌满日志。
+    /// 节流日志: 按 key 分桶, 同一 key 最多每 2 秒记一次。
+    /// key 是稳定的消息类别标识 (如 "uia_no_selection"), message 可带动态参数。
     /// </summary>
-    private void LogThrottled(string message)
+    private void LogThrottled(string throttleKey, string message)
     {
         var now = DateTime.UtcNow.Ticks;
-        var last = Interlocked.Read(ref _lastUiaFailLogTicks);
-        if (now - last >= UiaFailLogInterval)
+        var last = _throttleBuckets.GetOrAdd(throttleKey, 0L);
+        if (now - last >= UiaFailLogInterval &&
+            _throttleBuckets.TryUpdate(throttleKey, now, last))
         {
-            Interlocked.Exchange(ref _lastUiaFailLogTicks, now);
             _log.LogDebug("Tracking", message);
         }
     }
 
     /// <summary>
-    /// 屏幕面积的一半作为 BoundingRect 面积阈值。
-    /// 允许大多数输入区域通过（如微信 974x804），拒绝全屏级矩形（如 1920x1080）。
+    /// 判定 UIA FocusedElement 的 BoundingRect 看起来是否像 "输入框" 。
+    /// 历史教训: 对 Chromium/Electron (QQ/TG) 应用, UIA FocusedElement 经常返回的是整个
+    /// WebView 容器 (典型 974×804 或 1060×797) 而不是真正的输入 edit 节点。若把这种容器
+    /// 矩形的中点作为 caret, 放大镜会每次按键都跳到同一个死点, 用户感知 "不跟随" 。
+    /// 这里用严格的尺寸比例判据: 典型单行/几行文本输入框是 "较扁、较窄" 的矩形, 宽不会超
+    /// 主屏 60%、高不会超主屏 30%。超出即视为容器, 拒绝使用方法 B 。
+    /// MSAA OBJID_CARET (见 TryGetCaretViaMsaa) 作为 Chromium 类应用的真正 caret 来源。
     /// </summary>
-    private static double GetMaxBoundingArea()
+    private static bool LooksLikeInputControl(System.Windows.Rect rect)
     {
-        return SystemParameters.PrimaryScreenWidth * SystemParameters.PrimaryScreenHeight * 0.5;
+        var widthRatio = rect.Width / SystemParameters.PrimaryScreenWidth;
+        var heightRatio = rect.Height / SystemParameters.PrimaryScreenHeight;
+        return widthRatio < 0.60 && heightRatio < 0.30;
     }
 
     /// <summary>
@@ -188,7 +200,7 @@ public class TrackingManager : IDisposable
             // 控制台窗口（cmd/PowerShell）的 UIA 查询会失败并污染状态，直接跳过
             if (IsConsoleWindow())
             {
-                LogThrottled("Skipping caret lookup: console window");
+                LogThrottled("console_skip", "Skipping caret lookup: console window");
                 return;
             }
 
@@ -255,6 +267,17 @@ public class TrackingManager : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
+    // MSAA OBJID_CARET 路径: 对 Chromium/Electron (QQ / TG / VS Code 等) 往往能拿到精确
+    // caret, 这是 Windows 官方放大镜在此类应用下能跟随光标的主要机制之一。
+    [DllImport("oleacc.dll", PreserveSig = true)]
+    private static extern int AccessibleObjectFromWindow(
+        IntPtr hwnd, uint dwObjectID, [In] ref Guid riid,
+        [MarshalAs(UnmanagedType.IUnknown)] out object? ppvObject);
+
+    private const uint OBJID_CARET = 0xFFFFFFF8;
+    private static readonly Guid IID_IAccessible =
+        new("618736E0-3C3D-11CF-810C-00AA00389B71");
+
     [StructLayout(LayoutKind.Sequential)]
     private struct GUITHREADINFO
     {
@@ -300,11 +323,92 @@ public class TrackingManager : IDisposable
             return true;
         }
 
-        // 回退路径：UI Automation（适用于 Chrome、Edge、VS Code 等现代应用）
+        // 第二路径: MSAA OBJID_CARET (对 Chromium/Electron 如 QQ/TG 最可能拿到精确 caret)
+        if (TryGetCaretViaMsaa(out position))
+        {
+            Interlocked.Exchange(ref _consecutiveUiaTimeouts, 0);
+            return true;
+        }
+
+        // 回退路径：UI Automation（UWP / WinUI 等使用 UIA 原生树的应用）
         if (TryGetCaretViaUIAutomation(out position))
             return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// 通过 MSAA AccessibleObjectFromWindow(OBJID_CARET) 获取光标位置。
+    /// Chromium/Electron (QQ / TG / VS Code) 等应用会为 OBJID_CARET 返回一个专门的
+    /// IAccessible 对象, 其 accLocation 是精确的 caret 矩形 (比 UIA FocusedElement
+    /// 返回的容器 rect 精确得多)。这是 Windows 官方放大镜跟随此类应用的主要机制。
+    /// accLocation 通过 IDispatch late binding 调用, 避免引入 Accessibility.dll 依赖。
+    /// </summary>
+    private bool TryGetCaretViaMsaa(out Point position)
+    {
+        position = new Point();
+        object? accObj = null;
+
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero) return false;
+
+            var guid = IID_IAccessible;
+            var hr = AccessibleObjectFromWindow(hwnd, OBJID_CARET, ref guid, out accObj);
+            if (hr != 0 || accObj == null)
+            {
+                LogThrottled("msaa_fail", $"MSAA: no caret obj (hr=0x{hr:X8})");
+                return false;
+            }
+
+            // IAccessible.accLocation(out pxLeft, out pyTop, out pcxWidth, out pcyHeight, varChild)
+            // CHILDID_SELF = 0, 单位为屏幕物理像素
+            object[] args = { 0, 0, 0, 0, 0 };
+            var mods = new System.Reflection.ParameterModifier[1]
+            {
+                new(5)
+            };
+            mods[0][0] = true;  // out pxLeft
+            mods[0][1] = true;  // out pyTop
+            mods[0][2] = true;  // out pcxWidth
+            mods[0][3] = true;  // out pcyHeight
+            mods[0][4] = false; // in  varChild
+
+            accObj.GetType().InvokeMember(
+                "accLocation",
+                System.Reflection.BindingFlags.InvokeMethod,
+                null, accObj, args, mods, null, null);
+
+            var l = Convert.ToInt32(args[0]);
+            var t = Convert.ToInt32(args[1]);
+            var w = Convert.ToInt32(args[2]);
+            var h = Convert.ToInt32(args[3]);
+
+            if (l == 0 && t == 0 && w == 0 && h == 0)
+            {
+                LogThrottled("msaa_zero", "MSAA: caret location all zero");
+                return false;
+            }
+
+            // caret 是细长竖条, 用 (left, top + height/2) 作为跟踪点更接近视觉中心
+            position = new Point(l, t + h / 2.0);
+            LogThrottled("msaa_ok", $"MSAA: OK @{l},{t} size={w}x{h}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogThrottled("msaa_err", $"MSAA error: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            if (accObj != null && System.Runtime.InteropServices.Marshal.IsComObject(accObj))
+            {
+                try { System.Runtime.InteropServices.Marshal.ReleaseComObject(accObj); }
+                catch { /* 忽略 release 失败 */ }
+            }
+        }
     }
 
     /// <summary>
@@ -350,7 +454,7 @@ public class TrackingManager : IDisposable
             return false;
         }
 
-        LogThrottled("Win32: no caret (hwndCaret=0 or threadId=0)");
+        LogThrottled("win32_no_caret", "Win32: no caret (hwndCaret=0 or threadId=0)");
         return false;
     }
 
@@ -377,12 +481,15 @@ public class TrackingManager : IDisposable
             _log.LogDebug("Tracking", "UIA backoff expired, counter reset");
         }
 
+        // 诊断: 标记 UIA 路径被实际执行到 (排除 "Win32 失败后未回退 UIA" 的可能)
+        LogThrottled("uia_enter", "UIA: entered");
+
         try
         {
             var focused = System.Windows.Automation.AutomationElement.FocusedElement;
             if (focused == null)
             {
-                LogThrottled("UIA: FocusedElement null");
+                LogThrottled("uia_focused_null", "UIA: FocusedElement null");
                 return false;
             }
 
@@ -399,6 +506,7 @@ public class TrackingManager : IDisposable
                     {
                         // 每个 Rect 包含一行文字的边界矩形
                         position = new Point(rects[0].X, rects[0].Y);
+                        LogThrottled("uia_ok_sel", $"UIA: OK via TextPattern.Selection @{(int)position.X},{(int)position.Y}");
                         return true;
                     }
                 }
@@ -414,35 +522,38 @@ public class TrackingManager : IDisposable
                         // 取最后一行文本的右端作为近似光标位置
                         var lastRect = lastRects[lastRects.Length - 1];
                         position = new Point(lastRect.Right, lastRect.Y);
+                        LogThrottled("uia_ok_vis", $"UIA: OK via VisibleRange @{(int)position.X},{(int)position.Y}");
                         return true;
                     }
                 }
-                LogThrottled("UIA: TextPattern no selection");
+                LogThrottled("uia_textpattern_empty", "UIA: TextPattern no selection");
+            }
+            else
+            {
+                LogThrottled("uia_no_textpattern", "UIA: FocusedElement has no TextPattern");
             }
 
-            // 方法 B：使用焦点元素的边界矩形作为近似位置
+            // 方法 B：使用焦点元素的边界矩形作为近似位置 (仅在矩形看起来像输入框时才采用)
             var rect = focused.Current.BoundingRectangle;
             if (!rect.IsEmpty && rect.Width > 0 && rect.Height > 0)
             {
-                var area = rect.Width * rect.Height;
-                // 面积过大说明返回的是整个控件/面板区域（如 Terminal、Google Docs），
-                // 这种情况下位置不可靠，放弃切换到键盘模式
-                if (area > GetMaxBoundingArea())
+                if (!LooksLikeInputControl(rect))
                 {
-                    LogThrottled($"UIA: BoundingRect too large ({(int)rect.Width}x{(int)rect.Height})");
+                    LogThrottled("uia_rect_toolarge", $"UIA: BoundingRect too large ({(int)rect.Width}x{(int)rect.Height}) - not input-shaped");
                     return false;
                 }
 
                 // 使用焦点元素的左侧中间作为近似光标位置
                 position = new Point(rect.Left, rect.Top + rect.Height / 2);
+                LogThrottled("uia_ok_bnd", $"UIA: OK via BoundingRect @{(int)position.X},{(int)position.Y} size={(int)rect.Width}x{(int)rect.Height}");
                 return true;
             }
 
-            LogThrottled("UIA: BoundingRect empty");
+            LogThrottled("uia_rect_empty", "UIA: BoundingRect empty");
         }
         catch (System.Windows.Automation.ElementNotAvailableException)
         {
-            LogThrottled("UIA: ElementNotAvailable");
+            LogThrottled("uia_element_unavail", "UIA: ElementNotAvailable");
         }
         catch (Exception ex)
         {
